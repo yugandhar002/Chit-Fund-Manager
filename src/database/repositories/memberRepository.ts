@@ -20,10 +20,21 @@ export class MemberRepository {
     );
   }
 
+  async getMemberById(id: number): Promise<Member | null> {
+    return await this.db.getFirstAsync<Member>(
+      "SELECT * FROM members WHERE id = ?",
+      [id]
+    );
+  }
+
   async updateMember(id: number, data: Partial<Omit<Member, 'id' | 'chit_id' | 'created_at'>>): Promise<void> {
     const fields = Object.keys(data).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(data), id];
     await this.db.runAsync(`UPDATE members SET ${fields} WHERE id = ?`, values);
+  }
+
+  async deleteMember(id: number): Promise<void> {
+    await this.db.runAsync("DELETE FROM members WHERE id = ?", [id]);
   }
 
   async getAvailableBidders(chitId: number): Promise<Member[]> {

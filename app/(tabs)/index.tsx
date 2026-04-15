@@ -1,29 +1,42 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { StyleSheet, ScrollView, View, Text } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { StatCard, EmptyState } from '../../src/components/ui';
-import { getDatabase, ChitRepository, Chit } from '../../src/database';
+import { getDatabase, ChitRepository, MemberRepository, Chit } from '../../src/database';
 
 export default function DashboardScreen() {
+  const router = useRouter();
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
+  const [memberCount, setMemberCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const db = await getDatabase();
-        const chitRepo = new ChitRepository(db);
-        const chit = await chitRepo.getActiveChit();
-        setActiveChit(chit);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+  const loadData = useCallback(async () => {
+    try {
+      const db = await getDatabase();
+      const chitRepo = new ChitRepository(db);
+      const memberRepo = new MemberRepository(db);
+      
+      const chit = await chitRepo.getActiveChit();
+      setActiveChit(chit);
+      
+      if (chit) {
+        const members = await memberRepo.getMembersByChit(chit.id);
+        setMemberCount(members.length);
       }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-    loadData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   if (loading) {
     return (
@@ -41,7 +54,7 @@ export default function DashboardScreen() {
           title="No Active Chit"
           message="You haven't created any chit fund yet. Start by creating your first chit fund to manage members and auctions."
           actionLabel="Create New Chit"
-          onAction={() => console.log('Navigate to Create Chit')}
+          onAction={() => router.push('/create-chit')}
         />
       </View>
     );
@@ -57,8 +70,9 @@ export default function DashboardScreen() {
         />
         <StatCard 
           label="Members" 
-          value={`${activeChit.member_count}`} 
+          value={`${memberCount} / ${activeChit.member_count}`} 
           icon="people-outline" 
+          trend={memberCount < activeChit.member_count ? { value: `${activeChit.member_count - memberCount} left`, isPositive: false } : undefined}
         />
       </View>
       <View style={styles.statsRow}>
@@ -75,9 +89,13 @@ export default function DashboardScreen() {
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Chit Summary</Text>
-      <View style={styles.placeholderCard}>
-        <Text style={styles.placeholderText}>Full dashboard details coming in Phase 5</Text>
+      <Text style={styles.sectionTitle}>Setup Status</Text>
+      <View style={styles.setupCard}>
+        <Text style={styles.setupText}>
+          {memberCount < activeChit.member_count 
+            ? `Please add ${activeChit.member_count - memberCount} more members to complete the group setup.`
+            : "Setup complete! Ready to start the first month's collection (Month 1)."}
+        </Text>
       </View>
     </ScrollView>
   );
@@ -114,18 +132,16 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.xl,
     marginBottom: Theme.spacing.md,
   },
-  placeholderCard: {
+  setupCard: {
     backgroundColor: Colors.card,
     borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.xxl,
+    padding: Theme.spacing.xl,
     borderWidth: 1,
     borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  placeholderText: {
-    color: Colors.textSecondary,
+  setupText: {
+    color: Colors.textPrimary,
     fontSize: 16,
-    fontStyle: 'italic',
+    lineHeight: 22,
   },
 });

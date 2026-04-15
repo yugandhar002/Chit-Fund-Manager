@@ -16,7 +16,7 @@
 ## Phases
 
 ### Phase 1: Foundation & Data Layer
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Set up Expo project, design and implement the SQLite database schema, and create the data access layer (repositories) for all core entities — chits, members, months, auctions, and payments.
 **Deliverables**:
 - Expo project initialized with required dependencies
@@ -25,7 +25,7 @@
 - Basic navigation shell (tab navigator)
 
 ### Phase 2: Member Management & Chit Setup
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Build the UI for creating a new chit fund and managing members — add/edit/remove members, view member list, and set up the chit parameters (value, duration, monthly amount).
 **Deliverables**:
 - Create Chit screen (set value, members count, duration)
