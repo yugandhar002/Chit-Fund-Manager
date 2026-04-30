@@ -34,7 +34,7 @@
 - Chit configuration persisted to SQLite
 
 ### Phase 3: Auction & Commission Engine
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Build the monthly auction recording system — enter auction results, auto-calculate winner payout, commission split, per-member dividend, and track which members have won. Handle organizer's first month and double-pata detection.
 **Deliverables**:
 - Monthly auction entry screen
