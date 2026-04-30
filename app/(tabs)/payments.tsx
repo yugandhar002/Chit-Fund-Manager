@@ -6,9 +6,11 @@ import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Badge, StatCard } from '../../src/components/ui';
 import { getDatabase, PaymentRepository, RoundRepository, ChitRepository, Payment, MonthlyRound, Chit } from '../../src/database';
+import { useChit } from '../../src/context/ChitContext';
 
 export default function PaymentsScreen() {
   const router = useRouter();
+  const { selectedChitId } = useChit();
   const [loading, setLoading] = useState(true);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
   const [allRounds, setAllRounds] = useState<MonthlyRound[]>([]);
@@ -24,15 +26,21 @@ export default function PaymentsScreen() {
   });
 
   const loadData = useCallback(async () => {
+    if (!selectedChitId) {
+      setLoading(false);
+      return;
+    }
+
     try {
+      setLoading(true);
       const db = await getDatabase();
       const chitRepo = new ChitRepository(db);
       const roundRepo = new RoundRepository(db);
-      const paymentRepo = new PaymentRepository(db);
       
-      const chit = await chitRepo.getActiveChit();
+      const chit = await chitRepo.getChitById(selectedChitId);
+      setActiveChit(chit);
+      
       if (chit) {
-        setActiveChit(chit);
         const rounds = await roundRepo.getRoundsByChit(chit.id);
         setAllRounds(rounds);
         

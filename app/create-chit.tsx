@@ -6,10 +6,12 @@ import { format } from 'date-fns';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
-import { getDatabase, ChitRepository } from '../src/database';
+import { getDatabase, ChitRepository, Chit } from '../src/database';
+import { useChit } from '../src/context/ChitContext';
 
 export default function CreateChitScreen() {
   const router = useRouter();
+  const { setSelectedChitId } = useChit();
   const [loading, setLoading] = useState(false);
 
   // Form State
@@ -41,7 +43,7 @@ export default function CreateChitScreen() {
       const db = await getDatabase();
       const chitRepo = new ChitRepository(db);
       
-      await chitRepo.createChit({
+      const id = await chitRepo.createChit({
         name: name.trim(),
         total_value: totalValuePaisa,
         member_count: memberCountInt,
@@ -50,9 +52,10 @@ export default function CreateChitScreen() {
         start_date: startDate.toISOString(),
         status: 'active',
       });
-
-      Alert.alert('Success', 'Chit Fund created successfully!', [
-        { text: 'OK', onPress: () => router.replace('/') }
+      await setSelectedChitId(id);
+      
+      Alert.alert('Success', 'Chit fund created successfully!', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)') }
       ]);
     } catch (e) {
       console.error(e);

@@ -1,55 +1,52 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { StatCard, EmptyState, Button, Card } from '../../src/components/ui';
-import { getDatabase, ChitRepository, MemberRepository, RoundRepository, Chit } from '../../src/database';
+import { getDatabase, RoundRepository, AuctionRepository } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
+import { ChitSwitcher } from '../../src/components/ChitSwitcher';
+import { useChit } from '../../src/context/ChitContext';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const [activeChit, setActiveChit] = useState<Chit | null>(null);
-  const [memberCount, setMemberCount] = useState(0);
-  const [currentMonth, setCurrentMonth] = useState(0);
+  const { selectedChit, selectedChitId, loading: contextLoading } = useChit();
+  
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<any>(null);
+  const [recentAuctions, setRecentAuctions] = useState<any[]>([]);
+  const [availablePatas, setAvailablePatas] = useState(0);
   const [starting, setStarting] = useState(false);
-  const [financials, setFinancials] = useState({
-    totalCommission: 0,
-    totalCollected: 0,
-    totalExpected: 0,
-    totalOutstanding: 0,
-    winnerCount: 0,
-    availablePatas: 0
-  });
 
   const loadData = useCallback(async () => {
+    if (!selectedChitId) {
+      setLoading(false);
+      return;
+    }
+
     try {
+      setLoading(true);
       const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
-      const memberRepo = new MemberRepository(db);
       const service = new ChitService(db);
+      const auctionRepo = new AuctionRepository(db);
       
-      const chit = await chitRepo.getActiveChit();
-      setActiveChit(chit);
+      const [financials, winners, patas] = await Promise.all([
+        service.getFinancialSummary(selectedChitId),
+        auctionRepo.getWinners(selectedChitId),
+        service.getAvailablePatasCount(selectedChitId)
+      ]);
       
-      if (chit) {
-        const [members, summary] = await Promise.all([
-          memberRepo.getMembersByChit(chit.id),
-          service.getFinancialSummary(chit.id)
-        ]);
-        
-        setMemberCount(members.length);
-        setFinancials(summary);
-        setCurrentMonth(summary.currentMonth);
-      }
+      setSummary(financials);
+      setRecentAuctions(winners.slice(0, 3));
+      setAvailablePatas(patas);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedChitId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -58,160 +55,180 @@ export default function DashboardScreen() {
   );
 
   const handleStartFund = async () => {
-    if (!activeChit) return;
+    if (!selectedChitId) return;
     setStarting(true);
     try {
       const db = await getDatabase();
-      const service = new ChitService(db);
-      await service.startChitFund(activeChit.id);
-      Alert.alert('Success', 'Chit Fund started! Month 1 details recorded for the organizer.');
-      loadData();
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to start chit fund');
+      const roundRepo = new RoundRepository(db);
+      await roundRepo.createRound(selectedChitId, 1, 1);
+      Alert.alert('Success', 'Month 1 started! You can now track member payments.', [
+        { text: 'OK', onPress: () => loadData() }
+      ]);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to start fund');
     } finally {
       setStarting(false);
     }
   };
 
-  if (loading) {
+  if (contextLoading || (loading && !summary)) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading Dashboard...</Text>
+      <View style={[styles.container, styles.centered]}>
+        <Text style={{ color: Colors.textSecondary }}>Loading fund data...</Text>
       </View>
     );
   }
 
-  if (!activeChit) {
+  if (!selectedChitId) {
     return (
       <View style={styles.container}>
-        <EmptyState 
-          icon="business-outline"
-          title="No Active Chit"
-          message="You haven't created any chit fund yet. Start by creating your first chit fund to manage members and auctions."
-          actionLabel="Create New Chit"
-          onAction={() => router.push('/create-chit')}
-        />
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.title}>Chit Fund Manager</Text>
+          <EmptyState 
+            icon="business-outline"
+            title="Welcome!"
+            message="Manage all your chit funds in one place. Start by creating your first fund group."
+            actionLabel="Create First Chit Fund"
+            onAction={() => router.push('/create-chit')}
+          />
+        </ScrollView>
       </View>
     );
   }
 
-  const progress = activeChit ? (currentMonth / activeChit.duration_months) : 0;
+  if (!summary || !selectedChit) return null;
+
+  const progress = summary.currentMonth / selectedChit.duration_months;
+  const memberCount = summary.memberCount;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.statsRow}>
-        <StatCard 
-          label="Chit Value" 
-          value={`₹${(activeChit.total_value / 100).toLocaleString()}`} 
-          icon="cash-outline" 
-        />
-        <StatCard 
-          label="Members" 
-          value={`${memberCount} / ${activeChit.member_count}`} 
-          icon="people-outline" 
-          trend={memberCount < activeChit.member_count ? { value: `${activeChit.member_count - memberCount} left`, isPositive: false } : undefined}
-        />
-      </View>
-      <View style={styles.statsRow}>
-        <StatCard 
-          label="Commission" 
-          value={`₹${(financials.totalCommission / 100).toLocaleString()}`} 
-          icon="trending-up-outline" 
-        />
-        <StatCard 
-          label="Collected" 
-          value={`₹${(financials.totalCollected / 100).toLocaleString()}`} 
-          icon="wallet-outline" 
-          trend={financials.totalOutstanding > 0 ? { value: `₹${(financials.totalOutstanding / 100).toLocaleString()} pending`, isPositive: false } : undefined}
-        />
-      </View>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>Chit Fund Manager</Text>
+        
+        <ChitSwitcher />
 
-      <Text style={styles.sectionTitle}>Fund Progress</Text>
-      <Card style={styles.progressCard}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressText}>Month {currentMonth} of {activeChit.duration_months}</Text>
-          <Text style={styles.percentageText}>{Math.round(progress * 100)}%</Text>
+        <View style={styles.statsRow}>
+          <StatCard 
+            label="Chit Value" 
+            value={`₹${(selectedChit.total_value / 100).toLocaleString()}`} 
+            icon="cash-outline" 
+          />
+          <StatCard 
+            label="Members" 
+            value={`${memberCount} / ${selectedChit.member_count}`} 
+            icon="people-outline" 
+            trend={memberCount < selectedChit.member_count ? { value: `${selectedChit.member_count - memberCount} left`, isPositive: false } : undefined}
+          />
         </View>
-        <View style={styles.progressBarBg}>
-          <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+        <View style={styles.statsRow}>
+          <StatCard 
+            label="Commission" 
+            value={`₹${(summary.totalCommission / 100).toLocaleString()}`} 
+            icon="trending-up-outline" 
+          />
+          <StatCard 
+            label="Collected" 
+            value={`₹${(summary.totalCollected / 100).toLocaleString()}`} 
+            icon="wallet-outline" 
+            trend={summary.totalOutstanding > 0 ? { value: `₹${(summary.totalOutstanding / 100).toLocaleString()} pending`, isPositive: false } : undefined}
+          />
         </View>
-        <View style={styles.progressFooter}>
-          <Text style={styles.footerLabel}>{financials.winnerCount} / 20 Members won</Text>
-          <Text style={styles.footerLabel}>{activeChit.duration_months - currentMonth} months left</Text>
-        </View>
-      </Card>
 
-      <Text style={styles.sectionTitle}>{currentMonth === 0 ? 'Setup Status' : 'Quick Actions'}</Text>
-      <View style={styles.setupCard}>
-        {currentMonth === 0 ? (
-          <>
-            <Text style={styles.setupText}>
-              {memberCount < activeChit.member_count 
-                ? `Please add ${activeChit.member_count - memberCount} more members to complete the group setup.`
-                : "Setup complete! All 20 members are registered. You can now formally start the chit fund."}
-            </Text>
-            {memberCount === activeChit.member_count && (
-              <Button 
-                title="Start Month 1" 
-                onPress={handleStartFund} 
-                loading={starting}
-                style={styles.actionButton}
-              />
-            )}
-          </>
-        ) : (
-          <View style={styles.actionGrid}>
-            <TouchableOpacity 
-              style={styles.actionItem}
-              onPress={() => router.push('/auction')}
-            >
-              <View style={[styles.iconBox, { backgroundColor: Colors.secondary + '20' }]}>
-                <Text style={styles.actionIcon}>🔨</Text>
-                {financials.availablePatas > 0 && (
-                  <View style={styles.badgeContainer}>
-                    <Text style={styles.badgeText}>{financials.availablePatas}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.actionLabel}>Auction</Text>
-              {financials.availablePatas > 0 && (
-                <Text style={styles.availableSubtext}>{financials.availablePatas} Pata Available</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionItem}
-              onPress={() => router.push('/payments')}
-            >
-              <View style={[styles.iconBox, { backgroundColor: Colors.success + '20' }]}>
-                <Text style={styles.actionIcon}>💰</Text>
-              </View>
-              <Text style={styles.actionLabel}>Payments</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionItem}
-              onPress={() => router.push('/members')}
-            >
-              <View style={[styles.iconBox, { backgroundColor: Colors.info + '20' }]}>
-                <Text style={styles.actionIcon}>👥</Text>
-              </View>
-              <Text style={styles.actionLabel}>Members</Text>
-            </TouchableOpacity>
+        <Text style={styles.sectionTitle}>Fund Progress</Text>
+        <Card style={styles.progressCard}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressText}>Month {summary.currentMonth} of {selectedChit.duration_months}</Text>
+            <Text style={styles.percentageText}>{Math.round(progress * 100)}%</Text>
           </View>
-        )}
-      </View>
-
-      {financials.availablePatas > 0 && (
-        <Card style={styles.pataNotice}>
-          <Ionicons name="information-circle" size={24} color={Colors.secondary} />
-          <View style={styles.noticeContent}>
-            <Text style={styles.noticeTitle}>Extra Pata Available!</Text>
-            <Text style={styles.noticeMessage}>
-              You have {financials.availablePatas} extra auction(s) funded by commission. You can record them now.
-            </Text>
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+          </View>
+          <View style={styles.progressFooter}>
+            <Text style={styles.footerLabel}>{summary.winnerCount} / {selectedChit.member_count} Members won</Text>
+            <Text style={styles.footerLabel}>{selectedChit.duration_months - summary.currentMonth} months left</Text>
           </View>
         </Card>
-      )}
-    </ScrollView>
+
+        {availablePatas > 0 && (
+          <Card style={styles.pataAlert}>
+            <View style={styles.pataAlertContent}>
+              <View style={styles.pataIcon}>
+                <Ionicons name="notifications" size={20} color={Colors.textPrimary} />
+              </View>
+              <View style={styles.pataTextContainer}>
+                <Text style={styles.pataAlertTitle}>{availablePatas} EXTRA PATA READY!</Text>
+                <Text style={styles.pataAlertSub}>Record the next auction results now.</Text>
+              </View>
+              <Button 
+                title="Record" 
+                variant="primary" 
+                style={styles.pataButton} 
+                onPress={() => router.push('/auction')}
+              />
+            </View>
+          </Card>
+        )}
+
+        <Text style={styles.sectionTitle}>{summary.currentMonth === 0 ? 'Setup Status' : 'Quick Actions'}</Text>
+        <View style={styles.setupCard}>
+          {summary.currentMonth === 0 ? (
+            <>
+              <Text style={styles.setupText}>
+                {memberCount < selectedChit.member_count 
+                  ? `Please add ${selectedChit.member_count - memberCount} more members to complete the group setup.`
+                  : `Setup complete! All ${selectedChit.member_count} members are registered. You can now formally start the chit fund.`}
+              </Text>
+              {memberCount === selectedChit.member_count && (
+                <Button 
+                  title="Start Month 1" 
+                  onPress={handleStartFund} 
+                  loading={starting}
+                />
+              )}
+            </>
+          ) : (
+            <View style={styles.actionGrid}>
+              <TouchableOpacity 
+                style={styles.actionItem}
+                onPress={() => router.push('/auction')}
+              >
+                <View style={[styles.iconBox, { backgroundColor: Colors.secondary + '20' }]}>
+                  <Text style={styles.actionIcon}>🔨</Text>
+                  {availablePatas > 0 && (
+                    <View style={styles.badgeContainer}>
+                      <Text style={styles.badgeText}>{availablePatas}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.actionLabel}>Auction</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.actionItem}
+                onPress={() => router.push('/payments')}
+              >
+                <View style={[styles.iconBox, { backgroundColor: Colors.success + '20' }]}>
+                  <Text style={styles.actionIcon}>💰</Text>
+                </View>
+                <Text style={styles.actionLabel}>Payments</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.actionItem}
+                onPress={() => router.push('/members')}
+              >
+                <View style={[styles.iconBox, { backgroundColor: Colors.info + '20' }]}>
+                  <Text style={styles.actionIcon}>👥</Text>
+                </View>
+                <Text style={styles.actionLabel}>Members</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -220,19 +237,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.primary,
   },
-  content: {
-    padding: Theme.spacing.lg,
-    paddingBottom: 100, // Space for tab bar
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: Colors.primary,
+  centered: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    color: Colors.textSecondary,
-    fontSize: 16,
+  scrollContent: {
+    padding: Theme.spacing.lg,
+    paddingTop: Theme.spacing.xl * 2,
+    paddingBottom: Theme.spacing.xl * 4,
+  },
+  title: {
+    color: Colors.textPrimary,
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: Theme.spacing.xl,
   },
   statsRow: {
     flexDirection: 'row',
@@ -284,6 +302,42 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
   },
+  pataAlert: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.secondary,
+    borderWidth: 1,
+    marginTop: Theme.spacing.md,
+    padding: Theme.spacing.md,
+  },
+  pataAlertContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pataIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Theme.spacing.md,
+  },
+  pataTextContainer: {
+    flex: 1,
+  },
+  pataAlertTitle: {
+    color: Colors.textPrimary,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  pataAlertSub: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  pataButton: {
+    paddingHorizontal: 12,
+    height: 32,
+  },
   setupCard: {
     backgroundColor: Colors.card,
     borderRadius: Theme.borderRadius.md,
@@ -295,9 +349,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 16,
     lineHeight: 22,
-  },
-  actionButton: {
-    marginTop: Theme.spacing.lg,
+    marginBottom: Theme.spacing.lg,
   },
   actionGrid: {
     flexDirection: 'row',
@@ -307,25 +359,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   actionIcon: {
-    fontSize: 24,
+    fontSize: 28,
   },
   actionLabel: {
     color: Colors.textPrimary,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   badgeContainer: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -2,
+    right: -2,
     backgroundColor: Colors.error,
     borderRadius: 10,
     width: 20,
@@ -339,33 +391,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: 'bold',
-  },
-  availableSubtext: {
-    color: Colors.secondary,
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginTop: 2,
-  },
-  pataNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
-    marginTop: Theme.spacing.lg,
-    backgroundColor: Colors.secondary + '10',
-    borderColor: Colors.secondary,
-    borderWidth: 1,
-  },
-  noticeContent: {
-    marginLeft: Theme.spacing.md,
-    flex: 1,
-  },
-  noticeTitle: {
-    color: Colors.secondary,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  noticeMessage: {
-    color: Colors.textSecondary,
-    fontSize: 12,
   },
 });

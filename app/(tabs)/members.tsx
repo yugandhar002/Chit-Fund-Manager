@@ -5,33 +5,41 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge } from '../../src/components/ui';
-import { getDatabase, MemberRepository, ChitRepository, Member, Chit } from '../../src/database';
+import { getDatabase, MemberRepository, ChitRepository, Chit } from '../../src/database';
+import { useChit } from '../../src/context/ChitContext';
 
 export default function MembersScreen() {
   const router = useRouter();
-  const [activeChit, setActiveChit] = useState<Chit | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
+  const { selectedChitId } = useChit();
   const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<any[]>([]);
+  const [activeChit, setActiveChit] = useState<Chit | null>(null);
 
   const loadData = useCallback(async () => {
+    if (!selectedChitId) {
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
       const memberRepo = new MemberRepository(db);
+      const chitRepo = new ChitRepository(db);
       
-      const chit = await chitRepo.getActiveChit();
+      const [chit, memberList] = await Promise.all([
+        chitRepo.getChitById(selectedChitId),
+        memberRepo.getMembersByChit(selectedChitId)
+      ]);
+      
       setActiveChit(chit);
-      
-      if (chit) {
-        const memberList = await memberRepo.getMembersByChit(chit.id);
-        setMembers(memberList);
-      }
+      setMembers(memberList);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedChitId]);
 
   useFocusEffect(
     useCallback(() => {

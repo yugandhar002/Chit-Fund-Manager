@@ -73,7 +73,7 @@
 - Grouped auction history in Reports
 
 ### Phase 7: Multi-Chit Support
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Allow management of multiple independent chit funds simultaneously.
 **Deliverables**:
 - Global Chit Switcher

@@ -10,6 +10,7 @@ import { Alert } from 'react-native';
 
 export default function AuctionScreen() {
   const router = useRouter();
+  const { selectedChitId } = useChit();
   const [loading, setLoading] = useState(true);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
   const [currentRound, setCurrentRound] = useState<MonthlyRound | null>(null);
@@ -19,6 +20,10 @@ export default function AuctionScreen() {
   const [availablePatas, setAvailablePatas] = useState(0);
 
   const loadData = useCallback(async () => {
+    if (!selectedChitId) {
+      setLoading(false);
+      return;
+    }
     try {
       const db = await getDatabase();
       const chitRepo = new ChitRepository(db);
@@ -26,7 +31,7 @@ export default function AuctionScreen() {
       const auctionRepo = new AuctionRepository(db);
       const service = new ChitService(db);
       
-      const chit = await chitRepo.getActiveChit();
+      const chit = await chitRepo.getChitById(selectedChitId);
       setActiveChit(chit);
       
       if (chit) {

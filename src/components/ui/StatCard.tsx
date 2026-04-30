@@ -54,13 +54,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '45%',
     margin: Theme.spacing.xs,
-    justifyContent: 'space-between',
-    minHeight: 110, // Ensure cards in a row have consistent height
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Theme.spacing.xs,
+    marginBottom: Theme.spacing.sm,
   },
   iconContainer: {
     backgroundColor: Colors.surface,
@@ -74,7 +72,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   content: {
-    marginTop: 'auto', // Push content to the bottom
+    marginTop: Theme.spacing.xs,
   },
   value: {
     color: Colors.textPrimary,
@@ -87,11 +85,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    marginTop: 4,
+    marginTop: Theme.spacing.xs,
     alignSelf: 'flex-start',
   },
   trendText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     marginLeft: 2,
   },
