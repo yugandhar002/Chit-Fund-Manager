@@ -56,3 +56,11 @@ export interface Payment {
   created_at: string;
   updated_at: string;
 }
+
+export interface PaymentTransaction {
+  id: number;
+  payment_id: number;
+  amount: number;
+  payment_date: string;
+  notes?: string;
+}

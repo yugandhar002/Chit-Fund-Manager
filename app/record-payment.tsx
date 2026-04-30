@@ -20,6 +20,7 @@ export default function RecordPaymentScreen() {
   // Form State
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [transactions, setTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadData() {
@@ -33,16 +34,18 @@ export default function RecordPaymentScreen() {
         const p = await paymentRepo.getPaymentById(parseInt(paymentId));
         if (p) {
           setPayment(p);
-          // Show RUPEES in the text field, not Paisa
-          setAmount(((p.paid_amount || p.expected_amount) / 100).toString());
-          setNotes(p.notes || '');
+          // Don't pre-fill with full amount anymore, user wants to enter 'new' payment
+          setAmount(''); 
+          setNotes('');
           
-          const [m, r] = await Promise.all([
+          const [m, r, txs] = await Promise.all([
             memberRepo.getMemberById(p.member_id),
-            roundRepo.getRoundById(p.round_id)
+            roundRepo.getRoundById(p.round_id),
+            paymentRepo.getTransactionsByPayment(p.id)
           ]);
           setMember(m);
           setRound(r);
+          setTransactions(txs);
         }
       } catch (e) {
         console.error(e);
@@ -66,7 +69,7 @@ export default function RecordPaymentScreen() {
     try {
       const db = await getDatabase();
       const service = new ChitService(db);
-      await service.updateMemberPayment(payment.id, paidAmountPaisa, notes);
+      await service.addPaymentTransaction(payment.id, paidAmountPaisa, notes);
       
       Alert.alert('Success', 'Payment recorded successfully', [
         { text: 'OK', onPress: () => router.back() }
@@ -81,6 +84,8 @@ export default function RecordPaymentScreen() {
   if (loading) return <View style={styles.container} />;
   if (!payment || !member || !round) return <View style={styles.container} />;
 
+  const remaining = payment.expected_amount - payment.paid_amount;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.formCard}>
@@ -88,51 +93,69 @@ export default function RecordPaymentScreen() {
         <Text style={styles.memberName}>{member.name}</Text>
         
         <View style={styles.infoRow}>
-          <Text style={styles.label}>Expected Amount:</Text>
-          <Text style={styles.expectedValue}>₹{(payment.expected_amount / 100).toLocaleString()}</Text>
+          <View>
+            <Text style={styles.label}>Expected</Text>
+            <Text style={styles.expectedValue}>₹{(payment.expected_amount / 100).toLocaleString()}</Text>
+          </View>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={styles.label}>Paid</Text>
+            <Text style={[styles.expectedValue, { color: Colors.success }]}>₹{(payment.paid_amount / 100).toLocaleString()}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.label}>Remaining</Text>
+            <Text style={[styles.expectedValue, { color: Colors.error }]}>₹{(remaining / 100).toLocaleString()}</Text>
+          </View>
         </View>
 
         <TextField
-          label="Amount Paid (₹)"
-          placeholder="e.g. 30000"
+          label="New Payment Amount (₹)"
+          placeholder="Enter amount to add..."
           value={amount}
           onChangeText={setAmount}
           keyboardType="numeric"
-          selectTextOnFocus
         />
 
         <View style={styles.quickActions}>
           <TouchableOpacity 
             style={styles.quickButton} 
-            onPress={() => setAmount((payment.expected_amount / 100).toString())}
+            onPress={() => setAmount((remaining / 100).toString())}
           >
-            <Text style={styles.quickButtonText}>Full Pay</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.quickButton, { backgroundColor: Colors.card }]} 
-            onPress={() => setAmount('')}
-          >
-            <Text style={[styles.quickButtonText, { color: Colors.textSecondary }]}>Clear</Text>
+            <Text style={styles.quickButtonText}>Pay Remaining</Text>
           </TouchableOpacity>
         </View>
 
         <TextField
           label="Notes (Optional)"
-          placeholder="e.g. Paid via cash"
+          placeholder="e.g. Received part payment"
           value={notes}
           onChangeText={setNotes}
           multiline
-          numberOfLines={3}
-          style={{ height: 80 }}
+          numberOfLines={2}
+          style={{ height: 60 }}
         />
 
         <Button
-          title="Save Payment"
+          title="Add Payment"
           onPress={handleSave}
           loading={saving}
           style={styles.submitButton}
         />
       </Card>
+
+      {transactions.length > 0 && (
+        <>
+          <Text style={styles.historyTitle}>Payment History</Text>
+          {transactions.map((tx) => (
+            <Card key={tx.id} style={styles.txCard}>
+              <View style={styles.txHeader}>
+                <Text style={styles.txAmount}>+ ₹{(tx.amount / 100).toLocaleString()}</Text>
+                <Text style={styles.txDate}>{new Date(tx.payment_date).toLocaleDateString()}</Text>
+              </View>
+              {tx.notes && <Text style={styles.txNotes}>{tx.notes}</Text>}
+            </Card>
+          ))}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -196,5 +219,37 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: 'bold',
     fontSize: 12,
+  },
+  historyTitle: {
+    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: Theme.spacing.xl,
+    marginBottom: Theme.spacing.md,
+  },
+  txCard: {
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
+    backgroundColor: Colors.card,
+  },
+  txHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  txAmount: {
+    color: Colors.success,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  txDate: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  txNotes: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });

@@ -106,4 +106,18 @@ export class PaymentRepository {
       [chitId]
     );
   }
+
+  async addTransaction(paymentId: number, amount: number, notes?: string): Promise<void> {
+    await this.db.runAsync(
+      'INSERT INTO payment_transactions (payment_id, amount, notes) VALUES (?, ?, ?)',
+      [paymentId, amount, notes || null]
+    );
+  }
+
+  async getTransactionsByPayment(paymentId: number): Promise<any[]> {
+    return await this.db.getAllAsync<any>(
+      'SELECT * FROM payment_transactions WHERE payment_id = ? ORDER BY payment_date DESC',
+      [paymentId]
+    );
+  }
 }

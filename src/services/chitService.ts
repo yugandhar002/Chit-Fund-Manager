@@ -149,24 +149,28 @@ export class ChitService {
     return (naturalAuctionsElapsed + extraPatasEarned) - totalAuctionsHeld;
   }
 
-  async updateMemberPayment(paymentId: number, paidAmount: number, notes?: string): Promise<void> {
+  async addPaymentTransaction(paymentId: number, newAmount: number, notes?: string): Promise<void> {
     const paymentRepo = new PaymentRepository(this.db);
     const payment = await paymentRepo.getPaymentById(paymentId);
     if (!payment) throw new Error('Payment record not found');
 
+    const totalPaid = payment.paid_amount + newAmount;
+    
     let status: Payment['status'] = 'pending';
-    if (paidAmount >= payment.expected_amount) {
+    if (totalPaid >= payment.expected_amount) {
       status = 'paid';
-    } else if (paidAmount > 0) {
+    } else if (totalPaid > 0) {
       status = 'partial';
     }
 
     await paymentRepo.updatePayment(paymentId, {
-      paid_amount: paidAmount,
+      paid_amount: totalPaid,
       status,
       notes,
       payment_date: new Date().toISOString()
     });
+
+    await paymentRepo.addTransaction(paymentId, newAmount, notes);
   }
   async getFinancialSummary(chitId: number): Promise<any> {
     const auctionRepo = new AuctionRepository(this.db);

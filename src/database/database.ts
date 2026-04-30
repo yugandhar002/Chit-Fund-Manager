@@ -92,9 +92,17 @@ const initializeSchema = async (database: SQLite.SQLiteDatabase) => {
       notes TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (round_id) REFERENCES monthly_rounds(id),
       FOREIGN KEY (member_id) REFERENCES members(id),
       UNIQUE(round_id, member_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS payment_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      payment_id INTEGER NOT NULL,
+      amount INTEGER NOT NULL,
+      payment_date TEXT NOT NULL DEFAULT (datetime('now')),
+      notes TEXT,
+      FOREIGN KEY (payment_id) REFERENCES payments(id)
     );
   `);
 };
