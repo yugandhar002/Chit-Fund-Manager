@@ -44,7 +44,7 @@
 - Double-pata month detection and handling
 
 ### Phase 4: Payment Collection & Tracking
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Build the payment recording system — mark daily/monthly payments from each member, track partial payments, flag late/pending payments, and show payment history per member.
 **Deliverables**:
 - Payment entry screen (per member per month)
