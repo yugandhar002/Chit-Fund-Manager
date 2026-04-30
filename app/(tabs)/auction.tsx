@@ -24,6 +24,7 @@ export default function AuctionScreen() {
       const chitRepo = new ChitRepository(db);
       const roundRepo = new RoundRepository(db);
       const auctionRepo = new AuctionRepository(db);
+      const service = new ChitService(db);
       
       const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
