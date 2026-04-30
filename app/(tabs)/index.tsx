@@ -96,6 +96,17 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>{activeChit.name}</Text>
+        <TouchableOpacity 
+          style={styles.newFundButton}
+          onPress={() => router.push('/create-chit')}
+        >
+          <Ionicons name="add-circle-outline" size={20} color={Colors.secondary} />
+          <Text style={styles.newFundText}>New Fund</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.statsRow}>
         <StatCard 
           label="Chit Value" 
@@ -212,6 +223,33 @@ const styles = StyleSheet.create({
   loadingText: {
     color: Colors.textSecondary,
     fontSize: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.lg,
+  },
+  headerTitle: {
+    color: Colors.textPrimary,
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  newFundButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.secondary + '20',
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.secondary + '40',
+  },
+  newFundText: {
+    color: Colors.secondary,
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   statsRow: {
     flexDirection: 'row',
