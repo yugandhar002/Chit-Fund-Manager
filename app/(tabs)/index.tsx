@@ -3,7 +3,7 @@ import { StyleSheet, ScrollView, View, Text, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
-import { StatCard, EmptyState, Button } from '../../src/components/ui';
+import { StatCard, EmptyState, Button, Card } from '../../src/components/ui';
 import { getDatabase, ChitRepository, MemberRepository, RoundRepository, Chit } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
 
@@ -14,32 +14,33 @@ export default function DashboardScreen() {
   const [currentMonth, setCurrentMonth] = useState(0);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [financials, setFinancials] = useState({
+    totalCommission: 0,
+    totalCollected: 0,
+    totalExpected: 0,
+    totalOutstanding: 0,
+    winnerCount: 0
+  });
 
   const loadData = useCallback(async () => {
     try {
       const db = await getDatabase();
       const chitRepo = new ChitRepository(db);
       const memberRepo = new MemberRepository(db);
-      const roundRepo = new RoundRepository(db);
+      const service = new ChitService(db);
       
       const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
       
       if (chit) {
-        const [members, rounds] = await Promise.all([
+        const [members, summary] = await Promise.all([
           memberRepo.getMembersByChit(chit.id),
-          roundRepo.getRoundsByChit(chit.id)
+          service.getFinancialSummary(chit.id)
         ]);
         
         setMemberCount(members.length);
-        
-        if (rounds.length > 0) {
-          // Find current month (max month number)
-          const maxMonth = rounds.reduce((max, r) => Math.max(max, r.month_number), 0);
-          setCurrentMonth(maxMonth);
-        } else {
-          setCurrentMonth(0);
-        }
+        setFinancials(summary);
+        setCurrentMonth(summary.currentMonth);
       }
     } catch (e) {
       console.error(e);
@@ -92,6 +93,8 @@ export default function DashboardScreen() {
     );
   }
 
+  const progress = activeChit ? (currentMonth / activeChit.duration_months) : 0;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.statsRow}>
@@ -109,19 +112,34 @@ export default function DashboardScreen() {
       </View>
       <View style={styles.statsRow}>
         <StatCard 
-          label="Current Month" 
-          value={`${currentMonth || '-'} / ${activeChit.duration_months}`} 
-          icon="calendar-outline" 
+          label="Commission" 
+          value={`₹${(financials.totalCommission / 100).toLocaleString()}`} 
+          icon="trending-up-outline" 
         />
         <StatCard 
-          label="Total Collected" 
-          value="₹0" 
-          icon="trending-up-outline" 
-          trend={{ value: '0%', isPositive: true }}
+          label="Collected" 
+          value={`₹${(financials.totalCollected / 100).toLocaleString()}`} 
+          icon="wallet-outline" 
+          trend={financials.totalOutstanding > 0 ? { value: `₹${(financials.totalOutstanding / 100).toLocaleString()} pending`, isPositive: false } : undefined}
         />
       </View>
 
-      <Text style={styles.sectionTitle}>{currentMonth === 0 ? 'Setup Status' : 'Active Chit Status'}</Text>
+      <Text style={styles.sectionTitle}>Fund Progress</Text>
+      <Card style={styles.progressCard}>
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressText}>Month {currentMonth} of {activeChit.duration_months}</Text>
+          <Text style={styles.percentageText}>{Math.round(progress * 100)}%</Text>
+        </View>
+        <View style={styles.progressBarBg}>
+          <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+        </View>
+        <View style={styles.progressFooter}>
+          <Text style={styles.footerLabel}>{financials.winnerCount} / 20 Members won</Text>
+          <Text style={styles.footerLabel}>{activeChit.duration_months - currentMonth} months left</Text>
+        </View>
+      </Card>
+
+      <Text style={styles.sectionTitle}>{currentMonth === 0 ? 'Setup Status' : 'Quick Actions'}</Text>
       <View style={styles.setupCard}>
         {currentMonth === 0 ? (
           <>
@@ -140,10 +158,35 @@ export default function DashboardScreen() {
             )}
           </>
         ) : (
-          <Text style={styles.setupText}>
-            The chit fund is active. Month {currentMonth} is currently in progress. 
-            Check the Auction tab to record results or Payment tab to track collections.
-          </Text>
+          <View style={styles.actionGrid}>
+            <TouchableOpacity 
+              style={styles.actionItem}
+              onPress={() => router.push('/auction')}
+            >
+              <View style={[styles.iconBox, { backgroundColor: Colors.secondary + '20' }]}>
+                <Text style={styles.actionIcon}>🔨</Text>
+              </View>
+              <Text style={styles.actionLabel}>Auction</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionItem}
+              onPress={() => router.push('/payments')}
+            >
+              <View style={[styles.iconBox, { backgroundColor: Colors.success + '20' }]}>
+                <Text style={styles.actionIcon}>💰</Text>
+              </View>
+              <Text style={styles.actionLabel}>Payments</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionItem}
+              onPress={() => router.push('/members')}
+            >
+              <View style={[styles.iconBox, { backgroundColor: Colors.info + '20' }]}>
+                <Text style={styles.actionIcon}>👥</Text>
+              </View>
+              <Text style={styles.actionLabel}>Members</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </ScrollView>
@@ -181,6 +224,44 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.xl,
     marginBottom: Theme.spacing.md,
   },
+  progressCard: {
+    padding: Theme.spacing.lg,
+    marginBottom: Theme.spacing.sm,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Theme.spacing.sm,
+  },
+  progressText: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  percentageText: {
+    color: Colors.secondary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: Colors.border,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: Theme.spacing.sm,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.secondary,
+  },
+  progressFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  footerLabel: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
   setupCard: {
     backgroundColor: Colors.card,
     borderRadius: Theme.borderRadius.md,
@@ -195,5 +276,28 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginTop: Theme.spacing.lg,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  actionItem: {
+    alignItems: 'center',
+  },
+  iconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  actionIcon: {
+    fontSize: 24,
+  },
+  actionLabel: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

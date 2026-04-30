@@ -139,4 +139,29 @@ export class ChitService {
       payment_date: new Date().toISOString()
     });
   }
+  async getFinancialSummary(chitId: number): Promise<any> {
+    const auctionRepo = new AuctionRepository(this.db);
+    const paymentRepo = new PaymentRepository(this.db);
+    const roundRepo = new RoundRepository(this.db);
+
+    const [cumulativeCommission, financials, winners, rounds] = await Promise.all([
+      auctionRepo.getCumulativeCommission(chitId),
+      paymentRepo.getOverallFinancials(chitId),
+      auctionRepo.getWinners(chitId),
+      roundRepo.getRoundsByChit(chitId)
+    ]);
+
+    const currentMonth = rounds.length > 0 
+      ? rounds.reduce((max, r) => Math.max(max, r.month_number), 0)
+      : 0;
+
+    return {
+      totalCommission: cumulativeCommission,
+      totalCollected: financials.total_paid,
+      totalExpected: financials.total_expected,
+      totalOutstanding: financials.total_expected - financials.total_paid,
+      winnerCount: winners.length,
+      currentMonth
+    };
+  }
 }

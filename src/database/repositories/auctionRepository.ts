@@ -40,6 +40,14 @@ export class AuctionRepository {
        WHERE r.chit_id = ?`,
       [chitId]
     );
-    return result?.total || 0;
+  async getWinners(chitId: number): Promise<number[]> {
+    const results = await this.db.getAllAsync<{ winner_member_id: number }>(
+      `SELECT DISTINCT winner_member_id 
+       FROM auctions a
+       JOIN monthly_rounds r ON a.round_id = r.id
+       WHERE r.chit_id = ?`,
+      [chitId]
+    );
+    return results.map(r => r.winner_member_id);
   }
 }

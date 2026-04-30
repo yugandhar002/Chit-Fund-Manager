@@ -81,4 +81,29 @@ export class PaymentRepository {
       [newExpectedAmount, roundId]
     );
   }
+
+  async getOverallFinancials(chitId: number): Promise<{ total_expected: number, total_paid: number }> {
+    const result = await this.db.getFirstAsync<{ total_expected: number, total_paid: number }>(
+      `SELECT SUM(p.expected_amount) as total_expected, SUM(p.paid_amount) as total_paid
+       FROM payments p
+       JOIN monthly_rounds r ON p.round_id = r.id
+       WHERE r.chit_id = ?`,
+      [chitId]
+    );
+    return result || { total_expected: 0, total_paid: 0 };
+  }
+
+  async getOutstandingDuesByMember(chitId: number): Promise<{ member_id: number, member_name: string, total_due: number }[]> {
+    return await this.db.getAllAsync<{ member_id: number, member_name: string, total_due: number }>(
+      `SELECT m.id as member_id, m.name as member_name, SUM(p.expected_amount - p.paid_amount) as total_due
+       FROM payments p
+       JOIN members m ON p.member_id = m.id
+       JOIN monthly_rounds r ON p.round_id = r.id
+       WHERE r.chit_id = ?
+       GROUP BY m.id
+       HAVING total_due > 0
+       ORDER BY total_due DESC`,
+      [chitId]
+    );
+  }
 }
