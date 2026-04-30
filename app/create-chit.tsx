@@ -88,14 +88,14 @@ export default function CreateChitScreen() {
             keyboardType="numeric"
             value={totalValue}
             onChangeText={setTotalValue}
-            style={styles.halfInput}
+            containerStyle={styles.halfInput}
           />
           <TextField
             label="Duration (Months)"
             keyboardType="numeric"
             value={duration}
             onChangeText={setDuration}
-            style={styles.halfInput}
+            containerStyle={styles.halfInput}
           />
         </View>
 
@@ -105,7 +105,7 @@ export default function CreateChitScreen() {
             keyboardType="numeric"
             value={memberCount}
             onChangeText={setMemberCount}
-            style={styles.halfInput}
+            containerStyle={styles.halfInput}
           />
           <View style={styles.halfInput}>
             <Text style={styles.dateLabel}>Start Date</Text>
