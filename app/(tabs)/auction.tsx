@@ -178,6 +178,44 @@ export default function AuctionScreen() {
         </View>
       )}
 
+      {hasAuctionEntry && currentRound.is_double_pata === 1 && auctions.length < 2 && (
+        <Card style={[styles.actionCard, { borderColor: Colors.secondary, borderStyle: 'solid' }]}>
+          <Text style={[styles.hintText, { color: Colors.secondary, fontWeight: 'bold' }]}>
+            DOUBLE PATA DETECTED!
+          </Text>
+          <Text style={styles.hintText}>
+            Cumulative commission has reached ₹6,00,000. 
+            You can record a second auction for this month.
+          </Text>
+          <Button 
+            title="Record 2nd Auction" 
+            onPress={() => router.push({ pathname: '/record-auction', params: { roundId: currentRound.id, auctionNumber: '2' } })}
+            style={styles.recordButton}
+          />
+        </Card>
+      )}
+
+      {auctions.length > 1 && (
+        <View style={styles.resultContainer}>
+          <Text style={styles.sectionTitle}>2nd Auction Result</Text>
+          <Card style={styles.resultCard}>
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>Highest Bid (Commission)</Text>
+              <Text style={styles.resultValuePaisa}>₹{(auctions[1].commission_amount / 100).toLocaleString()}</Text>
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>Dividend per Member</Text>
+              <Text style={styles.dividendValue}>₹{(auctions[1].dividend_per_member / 100).toLocaleString()}</Text>
+            </View>
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>Payout to Winner</Text>
+              <Text style={styles.payoutValue}>₹{(auctions[1].payout_amount / 100).toLocaleString()}</Text>
+            </View>
+          </Card>
+        </View>
+      )}
+
       {currentRound.status === 'completed' && activeChit.duration_months > currentRound.month_number && (
         <View style={styles.nextStepContainer}>
           <Text style={styles.hintText}>Month {currentRound.month_number} is complete. You can now start the next month's cycle.</Text>

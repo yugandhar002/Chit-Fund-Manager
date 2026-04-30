@@ -6,10 +6,11 @@ import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
 import { getDatabase, AuctionRepository, MemberRepository, RoundRepository, ChitRepository, Member, Chit, MonthlyRound } from '../src/database';
+import { ChitService } from '../src/services/chitService';
 
 export default function RecordAuctionScreen() {
   const router = useRouter();
-  const { roundId } = useLocalSearchParams<{ roundId: string }>();
+  const { roundId, auctionNumber } = useLocalSearchParams<{ roundId: string, auctionNumber: string }>();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,16 +73,16 @@ export default function RecordAuctionScreen() {
     setSaving(true);
     try {
       const db = await getDatabase();
-      const auctionRepo = new AuctionRepository(db);
+      const service = new ChitService(db);
       
-      await auctionRepo.recordAuction({
+      await service.recordAuctionResult(activeChit!.id, {
         round_id: parseInt(roundId!),
         winner_member_id: selectedWinner.id,
         commission_amount: commissionPaisa,
         payout_amount: payoutPaisa,
         dividend_per_member: dividendPaisa,
         effective_contribution: (activeChit?.monthly_contribution || 0) - dividendPaisa,
-        auction_number: 1, // Usually 1 per round
+        auction_number: parseInt(auctionNumber || '1'),
       });
 
       Alert.alert('Success', 'Auction result recorded successfully', [
@@ -100,7 +101,7 @@ export default function RecordAuctionScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.formCard}>
-        <Text style={styles.infoLabel}>Month {round?.month_number} Auction</Text>
+        <Text style={styles.infoLabel}>Month {round?.month_number} Auction {auctionNumber && auctionNumber !== '1' ? `#${auctionNumber}` : ''}</Text>
         
         <Text style={styles.label}>Select Winner</Text>
         <TouchableOpacity 

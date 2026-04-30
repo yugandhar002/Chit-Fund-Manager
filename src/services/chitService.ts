@@ -80,4 +80,23 @@ export class ChitService {
       status: 'pending',
     });
   }
+
+  async recordAuctionResult(chitId: number, data: any): Promise<number> {
+    const auctionRepo = new AuctionRepository(this.db);
+    const roundRepo = new RoundRepository(this.db);
+    const chitRepo = new ChitRepository(this.db);
+
+    const chit = await chitRepo.getChitById(chitId);
+    if (!chit) throw new Error('Chit not found');
+
+    const auctionId = await auctionRepo.recordAuction(data);
+
+    // Check for double-pata: when cumulative commission reaches total chit value
+    const cumulative = await auctionRepo.getCumulativeCommission(chitId);
+    if (cumulative >= chit.total_value) {
+      await roundRepo.markAsDoublePata(data.round_id);
+    }
+
+    return auctionId;
+  }
 }

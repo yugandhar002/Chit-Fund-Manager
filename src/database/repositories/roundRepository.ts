@@ -20,6 +20,13 @@ export class RoundRepository {
     );
   }
 
+  async getRoundById(id: number): Promise<MonthlyRound | null> {
+    return await this.db.getFirstAsync<MonthlyRound>(
+      "SELECT * FROM monthly_rounds WHERE id = ?",
+      [id]
+    );
+  }
+
   async getCurrentRound(chitId: number): Promise<MonthlyRound | null> {
     return await this.db.getFirstAsync<MonthlyRound>(
       "SELECT * FROM monthly_rounds WHERE chit_id = ? AND status = 'pending' ORDER BY month_number ASC LIMIT 1",
@@ -39,5 +46,12 @@ export class RoundRepository {
         [status, id]
       );
     }
+  }
+
+  async markAsDoublePata(id: number): Promise<void> {
+    await this.db.runAsync(
+      "UPDATE monthly_rounds SET is_double_pata = 1 WHERE id = ?",
+      [id]
+    );
   }
 }
