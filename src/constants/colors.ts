@@ -9,6 +9,7 @@ export const Colors = {
   error: '#EF4444',        // Rose
   textPrimary: '#FFFFFF',  // White
   textSecondary: '#94A3B8', // Muted
+  info: '#3B82F6',          // Sky Blue
   border: '#2A3A4A',       // Subtle
   transparent: 'transparent',
 };

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Theme } from '../../constants/theme';
 
-type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'default';
+type BadgeVariant = 'success' | 'warning' | 'error' | 'danger' | 'info' | 'default';
 
 interface BadgeProps {
   label: string;
@@ -18,9 +18,10 @@ export const Badge: React.FC<BadgeProps> = ({ label, variant = 'default' }) => {
       case 'warning':
         return { bg: Colors.warning, text: Colors.textPrimary };
       case 'error':
+      case 'danger':
         return { bg: Colors.error, text: Colors.textPrimary };
       case 'info':
-        return { bg: Colors.secondary, text: Colors.textPrimary };
+        return { bg: Colors.info, text: Colors.textPrimary };
       default:
         return { bg: Colors.surface, text: Colors.textSecondary };
     }
