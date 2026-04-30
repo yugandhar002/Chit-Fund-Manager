@@ -72,3 +72,13 @@
 - Dashboard "Patas Available" indicator
 - Grouped auction history in Reports
 
+### Phase 7: Multi-Chit Support
+**Status**: ⬜ Not Started
+**Objective**: Allow management of multiple independent chit funds simultaneously.
+**Deliverables**:
+- Global Chit Switcher
+- Persistent selection state
+- Multi-chit creation flow
+- Updated data filtering per chit
+
+

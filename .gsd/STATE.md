@@ -1,16 +1,12 @@
 # STATE.md — Project Memory
 
 ## Current Position
-- **Phase**: 6 (completed)
-- **Task**: Multi-Pata Management
-- **Status**: Verified
+- **Phase**: 7
+- **Task**: Planning Multi-Chit Support
+- **Status**: Ready for execution
 
 ## Last Session Summary
-Implemented Phase 6. The app now supports recording 2-3 auctions in a single month. The logic for calculating available patas is based on cumulative commission. UI now shows indicators and grouped history.
+Finalized multi-pata management (Phase 6). Now moving to Multi-Chit support (Phase 7) to allow the organizer to handle multiple funds concurrently.
 
 ## Next Steps
-1. The app is ready for production use with multi-pata support.
-2. Final quality check.
-
-## Blockers
-_None._
+1. /execute 7
