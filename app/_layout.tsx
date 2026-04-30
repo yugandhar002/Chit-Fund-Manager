@@ -60,14 +60,21 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
+import { ChitProvider } from '../src/context/ChitContext';
+
 function RootLayoutNav() {
   return (
     <ThemeProvider value={DarkTheme}>
-      <StatusBar style="light" backgroundColor={Colors.primary} />
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Info' }} />
-      </Stack>
+      <ChitProvider>
+        <StatusBar style="light" backgroundColor={Colors.primary} />
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="create-chit" options={{ presentation: 'modal', title: 'New Chit Fund' }} />
+          <Stack.Screen name="add-member" options={{ presentation: 'modal', title: 'Add Member' }} />
+          <Stack.Screen name="record-auction" options={{ presentation: 'modal', title: 'Record Auction' }} />
+          <Stack.Screen name="record-payment" options={{ presentation: 'modal', title: 'Record Payment' }} />
+        </Stack>
+      </ChitProvider>
     </ThemeProvider>
   );
 }
