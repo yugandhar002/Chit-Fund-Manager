@@ -1,13 +1,11 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { Platform, StyleSheet } from 'react-native';
 import { Colors } from '../../src/constants/colors';
+import { ChitProvider } from '../../src/context/ChitContext';
 
 export default function TabLayout() {
   return (
-    <Tabs
     <ChitProvider>
       <Tabs
         screenOptions={{
