@@ -4,19 +4,15 @@ import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { Card, Badge, EmptyState } from '../../src/components/ui';
-import { getDatabase, ChitRepository, MemberRepository, PaymentRepository, AuctionRepository, Chit } from '../../src/database';
-import { useChit } from '../../src/context/ChitContext';
-import { ChitService } from '../../src/services/chitService';
+import { getDatabase, AuctionRepository, PaymentRepository, MemberRepository, ChitRepository, Chit } from '../../src/database';
 
 export default function ReportsScreen() {
-  const { selectedChitId } = useChit();
   const [loading, setLoading] = useState(true);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
-  const [summary, setSummary] = useState<any>(null);
+  const [winners, setWinners] = useState<number[]>([]);
+  const [outstanding, setOutstanding] = useState<{ member_id: number, member_name: string, total_due: number }[]>([]);
   const [commissionHistory, setCommissionHistory] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
-  const [outstanding, setOutstanding] = useState<any[]>([]);
-  const [winners, setWinners] = useState<any[]>([]);
 
   const groupedHistory = commissionHistory.reduce((acc, item) => {
     if (!acc[item.month_number]) acc[item.month_number] = [];
@@ -25,41 +21,35 @@ export default function ReportsScreen() {
   }, {} as any);
 
   const loadData = useCallback(async () => {
-    if (!selectedChitId) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      setLoading(true);
       const db = await getDatabase();
       const chitRepo = new ChitRepository(db);
-      const service = new ChitService(db);
-      const memberRepo = new MemberRepository(db);
-      const paymentRepo = new PaymentRepository(db);
       const auctionRepo = new AuctionRepository(db);
+      const paymentRepo = new PaymentRepository(db);
+      const memberRepo = new MemberRepository(db);
       
-      const [chit, financials, history, memberList, dues, winIds] = await Promise.all([
-        chitRepo.getChitById(selectedChitId),
-        service.getFinancialSummary(selectedChitId),
-        service.getCommissionHistory(selectedChitId),
-        memberRepo.getMembersByChit(selectedChitId),
-        paymentRepo.getOutstandingDuesByMember(selectedChitId),
-        auctionRepo.getWinners(selectedChitId)
-      ]);
-      
+      const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
-      setSummary(financials);
-      setCommissionHistory(history);
-      setMembers(memberList);
-      setOutstanding(dues);
-      setWinners(winIds.map(w => w.member_id));
+      
+      if (chit) {
+        const [winnerList, dueList, history, allMembers] = await Promise.all([
+          auctionRepo.getWinners(chit.id),
+          paymentRepo.getOutstandingDuesByMember(chit.id),
+          auctionRepo.getAuctionHistory(chit.id),
+          memberRepo.getMembersByChit(chit.id)
+        ]);
+        
+        setWinners(winnerList);
+        setOutstanding(dueList);
+        setCommissionHistory(history);
+        setMembers(allMembers);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [selectedChitId]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

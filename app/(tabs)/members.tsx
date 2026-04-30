@@ -5,41 +5,33 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge } from '../../src/components/ui';
-import { getDatabase, MemberRepository, ChitRepository, Chit } from '../../src/database';
-import { useChit } from '../../src/context/ChitContext';
+import { getDatabase, MemberRepository, ChitRepository, Member, Chit } from '../../src/database';
 
 export default function MembersScreen() {
   const router = useRouter();
-  const { selectedChitId } = useChit();
-  const [loading, setLoading] = useState(true);
-  const [members, setMembers] = useState<any[]>([]);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
-    if (!selectedChitId) {
-      setMembers([]);
-      setLoading(false);
-      return;
-    }
-
     try {
       const db = await getDatabase();
-      const memberRepo = new MemberRepository(db);
       const chitRepo = new ChitRepository(db);
+      const memberRepo = new MemberRepository(db);
       
-      const [chit, memberList] = await Promise.all([
-        chitRepo.getChitById(selectedChitId),
-        memberRepo.getMembersByChit(selectedChitId)
-      ]);
-      
+      const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
-      setMembers(memberList);
+      
+      if (chit) {
+        const memberList = await memberRepo.getMembersByChit(chit.id);
+        setMembers(memberList);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [selectedChitId]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,7 +80,7 @@ export default function MembersScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.countText}>{members.length} / 20 Members</Text>
+        <Text style={styles.countText}>{members.length} / {activeChit.member_count} Members</Text>
         <Button 
           title="Add Member" 
           onPress={() => router.push('/add-member')}
@@ -106,7 +98,7 @@ export default function MembersScreen() {
           <EmptyState 
             icon="people-outline"
             title="No Members"
-            message="Start adding the 20 members for this chit fund."
+            message={`Start adding the ${activeChit.member_count} members for this chit fund.`}
             actionLabel="Add First Member"
             onAction={() => router.push('/add-member')}
           />

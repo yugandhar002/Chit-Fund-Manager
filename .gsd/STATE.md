@@ -1,19 +1,16 @@
 # STATE.md — Project Memory
 
 ## Current Position
-- **Phase**: 7
-- **Task**: Multi-Chit Support
-- **Status**: ✅ Complete
+- **Phase**: 6 (completed)
+- **Task**: Multi-Pata Management
+- **Status**: Verified
 
 ## Last Session Summary
-### Phase 7: Multi-Chit Support
-**Status**: ✅ Complete
-**Objective**: Allow management of multiple independent chit funds simultaneously.
-**Deliverables**:
-- Global Chit Switcher
-- Persistent selection state
-- Multi-chit creation flow
-- Updated data filtering per chit.
+Implemented Phase 6. The app now supports recording 2-3 auctions in a single month. The logic for calculating available patas is based on cumulative commission. UI now shows indicators and grouped history.
 
 ## Next Steps
-1. /progress
+1. The app is ready for production use with multi-pata support.
+2. Final quality check.
+
+## Blockers
+_None._

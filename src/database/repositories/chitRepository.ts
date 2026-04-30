@@ -32,10 +32,4 @@ export class ChitRepository {
       [id]
     );
   }
-
-  async getAllChits(): Promise<Chit[]> {
-    return await this.db.getAllAsync<Chit>(
-      "SELECT * FROM chits ORDER BY created_at DESC"
-    );
-  }
 }

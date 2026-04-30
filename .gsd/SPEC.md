@@ -17,7 +17,7 @@ A mobile application (Android & iOS) for chit fund organizers to digitally manag
 - WhatsApp bot integration for auctions — auctions happen on WhatsApp, results entered in app
 - Multi-organizer support — single organizer (the user) manages everything
 - Member-facing portal — this is an organizer-only tool
-- Running multiple simultaneous chits (Supported from v1.1)
+- Running multiple simultaneous chits (v1 supports one chit at a time)
 
 ## Chit Fund Business Rules
 
@@ -61,8 +61,7 @@ A mobile application (Android & iOS) for chit fund organizers to digitally manag
 - **Single device**: No sync between devices needed for v1
 
 ## Success Criteria
-- [ ] Organizer can create multiple independent chits with different values and members
-- [ ] Organizer can switch between chits from a global selector
+- [ ] Organizer can create a chit with 20 members and ₹6,00,000 value
 - [ ] Organizer can record monthly auction results and app auto-calculates payouts and dividends
 - [ ] Organizer can mark payments as paid/partial/pending for each member each month
 - [ ] Dashboard shows at-a-glance status of the entire chit (who paid, who owes, monthly progress)

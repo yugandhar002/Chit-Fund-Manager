@@ -7,12 +7,10 @@ import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
 import { getDatabase, AuctionRepository, MemberRepository, RoundRepository, ChitRepository, Member, Chit, MonthlyRound } from '../src/database';
 import { ChitService } from '../src/services/chitService';
-import { useChit } from '../src/context/ChitContext';
 
 export default function RecordAuctionScreen() {
   const router = useRouter();
   const { roundId, auctionNumber } = useLocalSearchParams<{ roundId: string, auctionNumber: string }>();
-  const { selectedChitId } = useChit();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,14 +25,14 @@ export default function RecordAuctionScreen() {
 
   useEffect(() => {
     async function loadInitialData() {
-      if (!roundId || !selectedChitId) return;
+      if (!roundId) return;
       try {
         const db = await getDatabase();
         const roundRepo = new RoundRepository(db);
         const chitRepo = new ChitRepository(db);
         const memberRepo = new MemberRepository(db);
         
-        const chit = await chitRepo.getChitById(selectedChitId);
+        const chit = await chitRepo.getActiveChit();
         if (chit) {
           setActiveChit(chit);
           const rounds = await roundRepo.getRoundsByChit(chit.id);

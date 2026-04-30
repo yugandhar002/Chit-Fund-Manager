@@ -6,12 +6,10 @@ import { format } from 'date-fns';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
-import { getDatabase, ChitRepository, Chit } from '../src/database';
-import { useChit } from '../src/context/ChitContext';
+import { getDatabase, ChitRepository } from '../src/database';
 
 export default function CreateChitScreen() {
   const router = useRouter();
-  const { setSelectedChitId } = useChit();
   const [loading, setLoading] = useState(false);
 
   // Form State
@@ -43,7 +41,7 @@ export default function CreateChitScreen() {
       const db = await getDatabase();
       const chitRepo = new ChitRepository(db);
       
-      const id = await chitRepo.createChit({
+      await chitRepo.createChit({
         name: name.trim(),
         total_value: totalValuePaisa,
         member_count: memberCountInt,
@@ -52,10 +50,9 @@ export default function CreateChitScreen() {
         start_date: startDate.toISOString(),
         status: 'active',
       });
-      await setSelectedChitId(id);
-      
-      Alert.alert('Success', 'Chit fund created successfully!', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)') }
+
+      Alert.alert('Success', 'Chit Fund created successfully!', [
+        { text: 'OK', onPress: () => router.replace('/') }
       ]);
     } catch (e) {
       console.error(e);
@@ -88,14 +85,14 @@ export default function CreateChitScreen() {
             keyboardType="numeric"
             value={totalValue}
             onChangeText={setTotalValue}
-            containerStyle={styles.halfInput}
+            style={styles.halfInput}
           />
           <TextField
             label="Duration (Months)"
             keyboardType="numeric"
             value={duration}
             onChangeText={setDuration}
-            containerStyle={styles.halfInput}
+            style={styles.halfInput}
           />
         </View>
 
@@ -105,7 +102,7 @@ export default function CreateChitScreen() {
             keyboardType="numeric"
             value={memberCount}
             onChangeText={setMemberCount}
-            containerStyle={styles.halfInput}
+            style={styles.halfInput}
           />
           <View style={styles.halfInput}>
             <Text style={styles.dateLabel}>Start Date</Text>

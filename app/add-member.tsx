@@ -5,11 +5,9 @@ import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
 import { getDatabase, MemberRepository, ChitRepository, Chit } from '../src/database';
-import { useChit } from '../src/context/ChitContext';
 
 export default function AddMemberScreen() {
   const router = useRouter();
-  const { selectedChitId } = useChit();
   const [loading, setLoading] = useState(false);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
 
@@ -21,18 +19,17 @@ export default function AddMemberScreen() {
 
   useEffect(() => {
     async function loadChit() {
-      if (!selectedChitId) return;
       try {
         const db = await getDatabase();
         const chitRepo = new ChitRepository(db);
-        const chit = await chitRepo.getChitById(selectedChitId);
+        const chit = await chitRepo.getActiveChit();
         setActiveChit(chit);
       } catch (e) {
         console.error(e);
       }
     }
     loadChit();
-  }, [selectedChitId]);
+  }, []);
 
   const handleAdd = async () => {
     if (!name.trim()) {

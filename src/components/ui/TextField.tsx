@@ -6,12 +6,11 @@ import { Theme } from '../../constants/theme';
 interface TextFieldProps extends TextInputProps {
   label: string;
   error?: string;
-  containerStyle?: any;
 }
 
-export const TextField: React.FC<TextFieldProps> = ({ label, error, style, containerStyle, ...props }) => {
+export const TextField: React.FC<TextFieldProps> = ({ label, error, style, ...props }) => {
   return (
-    <View style={[styles.container, containerStyle]}>
+    <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         style={[
