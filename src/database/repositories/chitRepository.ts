@@ -25,4 +25,11 @@ export class ChitRepository {
       [status, id]
     );
   }
+
+  async getChitById(id: number): Promise<Chit | null> {
+    return await this.db.getFirstAsync<Chit>(
+      "SELECT * FROM chits WHERE id = ?",
+      [id]
+    );
+  }
 }
