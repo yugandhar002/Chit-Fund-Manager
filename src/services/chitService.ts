@@ -178,13 +178,16 @@ export class ChitService {
     const paymentRepo = new PaymentRepository(this.db);
     const roundRepo = new RoundRepository(this.db);
 
-    const [cumulativeCommission, financials, winners, rounds, availablePatas] = await Promise.all([
+    const [cumulativeCommission, financials, winners, rounds, availablePatas, members] = await Promise.all([
       auctionRepo.getCumulativeCommission(chitId),
       paymentRepo.getOverallFinancials(chitId),
       auctionRepo.getWinners(chitId),
       roundRepo.getRoundsByChit(chitId),
-      this.getAvailablePatasCount(chitId)
+      this.getAvailablePatasCount(chitId),
+      memberRepo.getMembersByChit(chitId)
     ]);
+
+    const memberCount = members.length;
 
     const currentMonth = rounds.length > 0 
       ? rounds.reduce((max, r) => Math.max(max, r.month_number), 0)
@@ -197,7 +200,13 @@ export class ChitService {
       totalOutstanding: financials.total_expected - financials.total_paid,
       winnerCount: winners.length,
       currentMonth,
-      availablePatas
+      availablePatas,
+      memberCount
     };
+  }
+
+  async getCommissionHistory(chitId: number): Promise<any[]> {
+    const auctionRepo = new AuctionRepository(this.db);
+    return await auctionRepo.getAuctionHistory(chitId);
   }
 }
