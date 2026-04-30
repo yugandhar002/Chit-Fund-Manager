@@ -5,6 +5,8 @@ import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge, StatCard } from '../../src/components/ui';
 import { getDatabase, RoundRepository, AuctionRepository, ChitRepository, MonthlyRound, Auction, Chit } from '../../src/database';
+import { ChitService } from '../../src/services/chitService';
+import { Alert } from 'react-native';
 
 export default function AuctionScreen() {
   const router = useRouter();
@@ -12,6 +14,8 @@ export default function AuctionScreen() {
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
   const [currentRound, setCurrentRound] = useState<MonthlyRound | null>(null);
   const [auctions, setAuctions] = useState<(Auction & { winner_name?: string })[]>([]);
+  const [history, setHistory] = useState<(Auction & { winner_name: string, month_number: number })[]>([]);
+  const [processing, setProcessing] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -32,9 +36,12 @@ export default function AuctionScreen() {
         setCurrentRound(latest || null);
         
         if (latest) {
-          const auctionList = await auctionRepo.getAuctionsByRound(latest.id);
-          // For now, history is handled in Plan 3.3, but let's show current round status
+          const [auctionList, historyList] = await Promise.all([
+            auctionRepo.getAuctionsByRound(latest.id),
+            auctionRepo.getAuctionHistory(chit.id)
+          ]);
           setAuctions(auctionList);
+          setHistory(historyList);
         }
       }
     } catch (e) {
@@ -49,6 +56,38 @@ export default function AuctionScreen() {
       loadData();
     }, [loadData])
   );
+
+  const handleConcludeMonth = async () => {
+    if (!currentRound) return;
+    setProcessing(true);
+    try {
+      const db = await getDatabase();
+      const service = new ChitService(db);
+      await service.concludeCurrentRound(currentRound.id);
+      Alert.alert('Success', `Month ${currentRound.month_number} concluded.`);
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to conclude month');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleStartNextMonth = async () => {
+    if (!activeChit) return;
+    setProcessing(true);
+    try {
+      const db = await getDatabase();
+      const service = new ChitService(db);
+      const nextRoundId = await service.startNextRound(activeChit.id);
+      Alert.alert('Success', 'Next month started.');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to start next month');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   if (loading) return <View style={styles.container} />;
 
@@ -130,19 +169,52 @@ export default function AuctionScreen() {
           {currentRound.status === 'pending' && (
             <Button 
               title="Conclude Month" 
-              onPress={() => console.log('Conclude month')} 
+              onPress={handleConcludeMonth} 
               variant="secondary"
+              loading={processing}
               style={styles.concludeButton}
             />
           )}
         </View>
       )}
 
-      {/* Placeholder for history - Plan 3.3 */}
+      {currentRound.status === 'completed' && activeChit.duration_months > currentRound.month_number && (
+        <View style={styles.nextStepContainer}>
+          <Text style={styles.hintText}>Month {currentRound.month_number} is complete. You can now start the next month's cycle.</Text>
+          <Button 
+            title={`Start Month ${currentRound.month_number + 1}`} 
+            onPress={handleStartNextMonth} 
+            loading={processing}
+            style={styles.recordButton}
+          />
+        </View>
+      )}
+
       <Text style={styles.sectionTitle}>History</Text>
-      <Card style={styles.historyPlaceholder}>
-        <Text style={styles.placeholderText}>Full auction history coming in Plan 3.3</Text>
-      </Card>
+      {history.length > 0 ? (
+        history.map((item) => (
+          <Card key={`${item.round_id}-${item.auction_number}`} style={styles.historyCard}>
+            <View style={styles.historyHeader}>
+              <Text style={styles.historyMonth}>Month {item.month_number}</Text>
+              <Text style={styles.historyDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
+            </View>
+            <View style={styles.historyBody}>
+              <View>
+                <Text style={styles.historyLabel}>Winner</Text>
+                <Text style={styles.historyWinner}>{item.winner_name}</Text>
+              </View>
+              <View style={styles.historyValues}>
+                <Text style={styles.historyLabel}>Commission</Text>
+                <Text style={styles.historyCommission}>₹{(item.commission_amount / 100).toLocaleString()}</Text>
+              </View>
+            </View>
+          </Card>
+        ))
+      ) : (
+        <Card style={styles.historyPlaceholder}>
+          <Text style={styles.placeholderText}>No auctions recorded yet.</Text>
+        </Card>
+      )}
     </ScrollView>
   );
 }
@@ -234,5 +306,54 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: Colors.textSecondary,
     fontStyle: 'italic',
+  },
+  nextStepContainer: {
+    marginTop: Theme.spacing.massive,
+    padding: Theme.spacing.lg,
+    backgroundColor: Colors.card,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  historyCard: {
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Theme.spacing.sm,
+  },
+  historyMonth: {
+    color: Colors.textPrimary,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  historyDate: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  historyBody: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyWinner: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  historyLabel: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    textTransform: 'uppercase',
+  },
+  historyValues: {
+    alignItems: 'flex-end',
+  },
+  historyCommission: {
+    color: Colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
