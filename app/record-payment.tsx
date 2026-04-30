@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, Text, Alert } from 'react-native';
+import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
