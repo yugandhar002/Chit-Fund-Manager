@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { StyleSheet, View, Text, FlatList, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
@@ -11,6 +11,8 @@ export default function PaymentsScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
+  const [allRounds, setAllRounds] = useState<MonthlyRound[]>([]);
+  const [selectedRoundId, setSelectedRoundId] = useState<number | null>(null);
   const [currentRound, setCurrentRound] = useState<MonthlyRound | null>(null);
   const [payments, setPayments] = useState<(Payment & { member_name: string })[]>([]);
   const [summary, setSummary] = useState({
@@ -33,19 +35,18 @@ export default function PaymentsScreen() {
       
       if (chit) {
         setActiveChit(chit);
-        const allRounds = await roundRepo.getRoundsByChit(chit.id);
-        const pending = allRounds.find(r => r.status === 'pending');
-        const latest = pending || allRounds[allRounds.length - 1];
+        const rounds = await roundRepo.getRoundsByChit(chit.id);
+        setAllRounds(rounds);
         
-        setCurrentRound(latest || null);
-        
-        if (latest) {
-          const [paymentList, paymentSummary] = await Promise.all([
-            paymentRepo.getPaymentsByRound(latest.id),
-            paymentRepo.getPaymentSummary(latest.id)
-          ]);
-          setPayments(paymentList);
-          setSummary(paymentSummary);
+        // Default to latest round if none selected
+        if (!selectedRoundId && rounds.length > 0) {
+          const pending = rounds.find(r => r.status === 'pending');
+          const latest = pending || rounds[rounds.length - 1];
+          setSelectedRoundId(latest.id);
+          setCurrentRound(latest);
+        } else if (selectedRoundId) {
+          const selected = rounds.find(r => r.id === selectedRoundId);
+          setCurrentRound(selected || null);
         }
       }
     } catch (e) {
@@ -53,13 +54,33 @@ export default function PaymentsScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedRoundId]);
+
+  const loadRoundData = useCallback(async () => {
+    if (!selectedRoundId) return;
+    try {
+      const db = await getDatabase();
+      const paymentRepo = new PaymentRepository(db);
+      const [paymentList, paymentSummary] = await Promise.all([
+        paymentRepo.getPaymentsByRound(selectedRoundId),
+        paymentRepo.getPaymentSummary(selectedRoundId)
+      ]);
+      setPayments(paymentList);
+      setSummary(paymentSummary);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [selectedRoundId]);
 
   useFocusEffect(
     useCallback(() => {
       loadData();
     }, [loadData])
   );
+
+  useEffect(() => {
+    loadRoundData();
+  }, [loadRoundData]);
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -127,6 +148,28 @@ export default function PaymentsScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.monthSelector}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.monthScroll}>
+          {allRounds.map((round) => (
+            <TouchableOpacity
+              key={round.id}
+              style={[
+                styles.monthTab,
+                selectedRoundId === round.id && styles.activeMonthTab
+              ]}
+              onPress={() => setSelectedRoundId(round.id)}
+            >
+              <Text style={[
+                styles.monthTabText,
+                selectedRoundId === round.id && styles.activeMonthTabText
+              ]}>
+                Month {round.month_number}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <View style={styles.summaryContainer}>
         <View style={styles.summaryHeader}>
           <Text style={styles.summaryTitle}>Month {currentRound.month_number} Collection</Text>
@@ -172,6 +215,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.primary,
+  },
+  monthSelector: {
+    backgroundColor: Colors.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  monthScroll: {
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.md,
+  },
+  monthTab: {
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.sm,
+    borderRadius: Theme.borderRadius.full,
+    marginRight: Theme.spacing.md,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  activeMonthTab: {
+    backgroundColor: Colors.secondary,
+    borderColor: Colors.secondary,
+  },
+  monthTabText: {
+    color: Colors.textSecondary,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  activeMonthTabText: {
+    color: Colors.textPrimary,
   },
   summaryContainer: {
     padding: Theme.spacing.lg,
