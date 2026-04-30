@@ -154,7 +154,8 @@ export class ChitService {
     const payment = await paymentRepo.getPaymentById(paymentId);
     if (!payment) throw new Error('Payment record not found');
 
-    const totalPaid = payment.paid_amount + newAmount;
+    const currentPaid = payment.paid_amount || 0;
+    const totalPaid = currentPaid + newAmount;
     
     let status: Payment['status'] = 'pending';
     if (totalPaid >= payment.expected_amount) {
@@ -166,7 +167,7 @@ export class ChitService {
     await paymentRepo.updatePayment(paymentId, {
       paid_amount: totalPaid,
       status,
-      notes,
+      notes: notes || undefined,
       payment_date: new Date().toISOString()
     });
 

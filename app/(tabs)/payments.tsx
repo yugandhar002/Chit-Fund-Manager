@@ -73,7 +73,8 @@ export default function PaymentsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+      loadRoundData();
+    }, [loadData, loadRoundData])
   );
 
   useEffect(() => {
