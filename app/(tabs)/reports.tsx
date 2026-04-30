@@ -14,6 +14,12 @@ export default function ReportsScreen() {
   const [commissionHistory, setCommissionHistory] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
 
+  const groupedHistory = commissionHistory.reduce((acc, item) => {
+    if (!acc[item.month_number]) acc[item.month_number] = [];
+    acc[item.month_number].push(item);
+    return acc;
+  }, {} as any);
+
   const loadData = useCallback(async () => {
     try {
       const db = await getDatabase();
@@ -113,13 +119,25 @@ export default function ReportsScreen() {
 
       <Text style={styles.sectionTitle}>Commission History</Text>
       <Card style={styles.historyCard}>
-        {commissionHistory.map((item, index) => (
-          <View key={`${item.id}-${index}`} style={styles.historyRow}>
-            <View>
-              <Text style={styles.historyMonth}>Month {item.month_number}</Text>
-              <Text style={styles.historyWinner}>Winner: {item.winner_name}</Text>
+        {Object.keys(groupedHistory).reverse().map((month) => (
+          <View key={month} style={styles.monthGroup}>
+            <View style={styles.monthHeader}>
+              <Text style={styles.historyMonthLabel}>Month {month}</Text>
+              <Text style={styles.monthTotal}>
+                Total: ₹{(groupedHistory[month].reduce((sum: number, item: any) => sum + item.commission_amount, 0) / 100).toLocaleString()}
+              </Text>
             </View>
-            <Text style={styles.historyComm}>₹{(item.commission_amount / 100).toLocaleString()}</Text>
+            {groupedHistory[month].map((item: any, index: number) => (
+              <View key={`${item.id}-${index}`} style={styles.historyRow}>
+                <View style={styles.winnerInfo}>
+                  <Text style={styles.historyWinner}>Winner: {item.winner_name}</Text>
+                  {groupedHistory[month].length > 1 && (
+                    <Badge label={`Pata ${item.auction_number}`} variant="info" style={styles.miniBadge} />
+                  )}
+                </View>
+                <Text style={styles.historyComm}>₹{(item.commission_amount / 100).toLocaleString()}</Text>
+              </View>
+            ))}
           </View>
         ))}
         {commissionHistory.length === 0 && (
@@ -244,5 +262,35 @@ const styles = StyleSheet.create({
   emptyText: {
     color: Colors.textSecondary,
     fontStyle: 'italic',
+  },
+  monthGroup: {
+    marginBottom: Theme.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingBottom: Theme.spacing.sm,
+  },
+  monthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    padding: Theme.spacing.sm,
+    borderRadius: Theme.borderRadius.sm,
+    marginBottom: Theme.spacing.xs,
+  },
+  historyMonthLabel: {
+    color: Colors.secondary,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  monthTotal: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  winnerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
 });

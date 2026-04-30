@@ -16,6 +16,7 @@ export default function AuctionScreen() {
   const [auctions, setAuctions] = useState<(Auction & { winner_name?: string })[]>([]);
   const [history, setHistory] = useState<(Auction & { winner_name: string, month_number: number })[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [availablePatas, setAvailablePatas] = useState(0);
 
   const loadData = useCallback(async () => {
     try {
@@ -36,12 +37,14 @@ export default function AuctionScreen() {
         setCurrentRound(latest || null);
         
         if (latest) {
-          const [auctionList, historyList] = await Promise.all([
+          const [auctionList, historyList, pataCount] = await Promise.all([
             auctionRepo.getAuctionsByRound(latest.id),
-            auctionRepo.getAuctionHistory(chit.id)
+            auctionRepo.getAuctionHistory(chit.id),
+            service.getAvailablePatasCount(chit.id)
           ]);
           setAuctions(auctionList);
           setHistory(historyList);
+          setAvailablePatas(pataCount);
         }
       }
     } catch (e) {
@@ -148,72 +151,60 @@ export default function AuctionScreen() {
           />
         </Card>
       ) : (
-        <View style={styles.resultContainer}>
-          <Text style={styles.sectionTitle}>Auction Result</Text>
+      {auctions.map((auction, index) => (
+        <View key={auction.id} style={styles.resultContainer}>
+          <Text style={styles.sectionTitle}>
+            {auction.auction_number === 1 ? 'Auction Result' : `Auction #${auction.auction_number} Result`}
+          </Text>
           <Card style={styles.resultCard}>
             <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>Winner</Text>
+              <Text style={styles.winnerName}>{auction.winner_name || 'Unknown'}</Text>
+            </View>
+            <View style={styles.resultRow}>
               <Text style={styles.resultLabel}>Highest Bid (Commission)</Text>
-              <Text style={styles.resultValuePaisa}>₹{(auctions[0].commission_amount / 100).toLocaleString()}</Text>
+              <Text style={styles.resultValuePaisa}>₹{(auction.commission_amount / 100).toLocaleString()}</Text>
             </View>
             <View style={styles.separator} />
             <View style={styles.resultRow}>
               <Text style={styles.resultLabel}>Dividend per Member</Text>
-              <Text style={styles.dividendValue}>₹{(auctions[0].dividend_per_member / 100).toLocaleString()}</Text>
+              <Text style={styles.dividendValue}>₹{(auction.dividend_per_member / 100).toLocaleString()}</Text>
             </View>
             <View style={styles.resultRow}>
               <Text style={styles.resultLabel}>Payout to Winner</Text>
-              <Text style={styles.payoutValue}>₹{(auctions[0].payout_amount / 100).toLocaleString()}</Text>
+              <Text style={styles.payoutValue}>₹{(auction.payout_amount / 100).toLocaleString()}</Text>
             </View>
           </Card>
-
-          {currentRound.status === 'pending' && (
-            <Button 
-              title="Conclude Month" 
-              onPress={handleConcludeMonth} 
-              variant="secondary"
-              loading={processing}
-              style={styles.concludeButton}
-            />
-          )}
         </View>
+      ))}
+
+      {currentRound.status === 'pending' && auctions.length > 0 && (
+        <Button 
+          title="Conclude Month" 
+          onPress={handleConcludeMonth} 
+          variant="secondary"
+          loading={processing}
+          style={styles.concludeButton}
+        />
       )}
 
-      {hasAuctionEntry && currentRound.is_double_pata === 1 && auctions.length < 2 && (
-        <Card style={[styles.actionCard, { borderColor: Colors.secondary, borderStyle: 'solid' }]}>
+      {currentRound.status === 'pending' && availablePatas > 0 && (
+        <Card style={[styles.actionCard, { borderColor: Colors.secondary, borderStyle: 'solid', marginTop: Theme.spacing.xl }]}>
           <Text style={[styles.hintText, { color: Colors.secondary, fontWeight: 'bold' }]}>
-            DOUBLE PATA DETECTED!
+            {availablePatas} EXTRA PATA AVAILABLE!
           </Text>
           <Text style={styles.hintText}>
-            Cumulative commission has reached ₹6,00,000. 
-            You can record a second auction for this month.
+            You have funded {availablePatas} extra auction(s). You can record the next one now.
           </Text>
           <Button 
-            title="Record 2nd Auction" 
-            onPress={() => router.push({ pathname: '/record-auction', params: { roundId: currentRound.id, auctionNumber: '2' } })}
+            title={`Record Auction #${auctions.length + 1}`} 
+            onPress={() => router.push({ 
+              pathname: '/record-auction', 
+              params: { roundId: currentRound.id, auctionNumber: (auctions.length + 1).toString() } 
+            })}
             style={styles.recordButton}
           />
         </Card>
-      )}
-
-      {auctions.length > 1 && (
-        <View style={styles.resultContainer}>
-          <Text style={styles.sectionTitle}>2nd Auction Result</Text>
-          <Card style={styles.resultCard}>
-            <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Highest Bid (Commission)</Text>
-              <Text style={styles.resultValuePaisa}>₹{(auctions[1].commission_amount / 100).toLocaleString()}</Text>
-            </View>
-            <View style={styles.separator} />
-            <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Dividend per Member</Text>
-              <Text style={styles.dividendValue}>₹{(auctions[1].dividend_per_member / 100).toLocaleString()}</Text>
-            </View>
-            <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Payout to Winner</Text>
-              <Text style={styles.payoutValue}>₹{(auctions[1].payout_amount / 100).toLocaleString()}</Text>
-            </View>
-          </Card>
-        </View>
       )}
 
       {currentRound.status === 'completed' && activeChit.duration_months > currentRound.month_number && (
@@ -327,6 +318,11 @@ const styles = StyleSheet.create({
   payoutValue: {
     color: Colors.secondary,
     fontSize: 20,
+    fontWeight: 'bold',
+  },
+  winnerName: {
+    color: Colors.textPrimary,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   separator: {

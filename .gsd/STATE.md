@@ -1,16 +1,16 @@
 # STATE.md — Project Memory
 
 ## Current Position
-- **Phase**: 6 (planning)
+- **Phase**: 6 (completed)
 - **Task**: Multi-Pata Management
-- **Status**: Plan created, awaiting approval
+- **Status**: Verified
 
 ## Last Session Summary
-Finalized Phase 5 and verified the application on web. Fixed several UI and Type errors. Created a new plan (Phase 6) to handle multiple auctions per month (2nd and 3rd patas).
+Implemented Phase 6. The app now supports recording 2-3 auctions in a single month. The logic for calculating available patas is based on cumulative commission. UI now shows indicators and grouped history.
 
 ## Next Steps
-1. Approve Phase 6 implementation plan.
-2. Execute Phase 6 tasks.
+1. The app is ready for production use with multi-pata support.
+2. Final quality check.
 
 ## Blockers
 _None._

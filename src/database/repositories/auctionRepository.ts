@@ -40,6 +40,9 @@ export class AuctionRepository {
        WHERE r.chit_id = ?`,
       [chitId]
     );
+    return result?.total || 0;
+  }
+
   async getWinners(chitId: number): Promise<number[]> {
     const results = await this.db.getAllAsync<{ winner_member_id: number }>(
       `SELECT DISTINCT winner_member_id 

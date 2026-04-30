@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { StatCard, EmptyState, Button, Card } from '../../src/components/ui';
@@ -19,7 +20,8 @@ export default function DashboardScreen() {
     totalCollected: 0,
     totalExpected: 0,
     totalOutstanding: 0,
-    winnerCount: 0
+    winnerCount: 0,
+    availablePatas: 0
   });
 
   const loadData = useCallback(async () => {
@@ -165,8 +167,16 @@ export default function DashboardScreen() {
             >
               <View style={[styles.iconBox, { backgroundColor: Colors.secondary + '20' }]}>
                 <Text style={styles.actionIcon}>🔨</Text>
+                {financials.availablePatas > 0 && (
+                  <View style={styles.badgeContainer}>
+                    <Text style={styles.badgeText}>{financials.availablePatas}</Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.actionLabel}>Auction</Text>
+              {financials.availablePatas > 0 && (
+                <Text style={styles.availableSubtext}>{financials.availablePatas} Pata Available</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.actionItem}
@@ -189,6 +199,18 @@ export default function DashboardScreen() {
           </View>
         )}
       </View>
+
+      {financials.availablePatas > 0 && (
+        <Card style={styles.pataNotice}>
+          <Ionicons name="information-circle" size={24} color={Colors.secondary} />
+          <View style={styles.noticeContent}>
+            <Text style={styles.noticeTitle}>Extra Pata Available!</Text>
+            <Text style={styles.noticeMessage}>
+              You have {financials.availablePatas} extra auction(s) funded by commission. You can record them now.
+            </Text>
+          </View>
+        </Card>
+      )}
     </ScrollView>
   );
 }
@@ -299,5 +321,51 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 12,
     fontWeight: '500',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: Colors.error,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.card,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  availableSubtext: {
+    color: Colors.secondary,
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  pataNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Theme.spacing.md,
+    marginTop: Theme.spacing.lg,
+    backgroundColor: Colors.secondary + '10',
+    borderColor: Colors.secondary,
+    borderWidth: 1,
+  },
+  noticeContent: {
+    marginLeft: Theme.spacing.md,
+    flex: 1,
+  },
+  noticeTitle: {
+    color: Colors.secondary,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  noticeMessage: {
+    color: Colors.textSecondary,
+    fontSize: 12,
   },
 });
