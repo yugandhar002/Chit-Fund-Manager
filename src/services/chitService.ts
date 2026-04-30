@@ -3,6 +3,8 @@ import { RoundRepository } from '../database/repositories/roundRepository';
 import { AuctionRepository } from '../database/repositories/auctionRepository';
 import { MemberRepository } from '../database/repositories/memberRepository';
 import { ChitRepository } from '../database/repositories/chitRepository';
+import { PaymentRepository } from '../database/repositories/paymentRepository';
+import { Payment } from '../database/types';
 
 export class ChitService {
   constructor(private db: SQLiteDatabase) {}
@@ -49,6 +51,9 @@ export class ChitService {
       effective_contribution: chit.monthly_contribution,
       auction_number: 1,
     });
+
+    const paymentRepo = new PaymentRepository(this.db);
+    await paymentRepo.createPaymentEntries(roundId, members.map(m => m.id), chit.monthly_contribution);
   }
 
   async concludeCurrentRound(roundId: number): Promise<void> {
@@ -91,6 +96,21 @@ export class ChitService {
 
     const auctionId = await auctionRepo.recordAuction(data);
 
+    const paymentRepo = new PaymentRepository(this.db);
+    const memberRepo = new MemberRepository(this.db);
+    
+    // Generate or update payment entries
+    const existingPayments = await paymentRepo.getPaymentsByRound(data.round_id);
+    if (existingPayments.length === 0) {
+      const members = await memberRepo.getMembersByChit(chitId);
+      await paymentRepo.createPaymentEntries(data.round_id, members.map(m => m.id), data.effective_contribution);
+    } else {
+      // Adjustment for double-pata (second auction)
+      // The expected amount for everyone should be reduced by the new dividend
+      const newExpected = existingPayments[0].expected_amount - data.dividend_per_member;
+      await paymentRepo.updateExpectedAmountsForRound(data.round_id, newExpected);
+    }
+
     // Check for double-pata: when cumulative commission reaches total chit value
     const cumulative = await auctionRepo.getCumulativeCommission(chitId);
     if (cumulative >= chit.total_value) {
@@ -98,5 +118,25 @@ export class ChitService {
     }
 
     return auctionId;
+  }
+
+  async updateMemberPayment(paymentId: number, paidAmount: number, notes?: string): Promise<void> {
+    const paymentRepo = new PaymentRepository(this.db);
+    const payment = await paymentRepo.getPaymentById(paymentId);
+    if (!payment) throw new Error('Payment record not found');
+
+    let status: Payment['status'] = 'pending';
+    if (paidAmount >= payment.expected_amount) {
+      status = 'paid';
+    } else if (paidAmount > 0) {
+      status = 'partial';
+    }
+
+    await paymentRepo.updatePayment(paymentId, {
+      paid_amount: paidAmount,
+      status,
+      notes,
+      payment_date: new Date().toISOString()
+    });
   }
 }

@@ -68,4 +68,17 @@ export class PaymentRepository {
     );
     return result || { total_expected: 0, total_paid: 0, paid_count: 0, partial_count: 0, pending_count: 0 };
   }
+  async getPaymentById(id: number): Promise<Payment | null> {
+    return await this.db.getFirstAsync<Payment>(
+      "SELECT * FROM payments WHERE id = ?",
+      [id]
+    );
+  }
+
+  async updateExpectedAmountsForRound(roundId: number, newExpectedAmount: number): Promise<void> {
+    await this.db.runAsync(
+      "UPDATE payments SET expected_amount = ?, updated_at = datetime('now') WHERE round_id = ?",
+      [newExpectedAmount, roundId]
+    );
+  }
 }
