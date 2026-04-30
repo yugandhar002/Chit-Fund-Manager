@@ -44,7 +44,7 @@ export default function ReportsScreen() {
         service.getFinancialSummary(selectedChitId),
         service.getCommissionHistory(selectedChitId),
         memberRepo.getMembersByChit(selectedChitId),
-        paymentRepo.getOutstandingDues(selectedChitId),
+        paymentRepo.getOutstandingDuesByMember(selectedChitId),
         auctionRepo.getWinners(selectedChitId)
       ]);
       
