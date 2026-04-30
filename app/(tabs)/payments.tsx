@@ -31,8 +31,6 @@ export default function PaymentsScreen() {
       const paymentRepo = new PaymentRepository(db);
       
       const chit = await chitRepo.getActiveChit();
-      setActiveChit(activeChit);
-      
       if (chit) {
         setActiveChit(chit);
         const rounds = await roundRepo.getRoundsByChit(chit.id);

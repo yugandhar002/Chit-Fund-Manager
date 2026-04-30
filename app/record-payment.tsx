@@ -33,7 +33,8 @@ export default function RecordPaymentScreen() {
         const p = await paymentRepo.getPaymentById(parseInt(paymentId));
         if (p) {
           setPayment(p);
-          setAmount((p.paid_amount || p.expected_amount).toString());
+          // Show RUPEES in the text field, not Paisa
+          setAmount(((p.paid_amount || p.expected_amount) / 100).toString());
           setNotes(p.notes || '');
           
           const [m, r] = await Promise.all([
@@ -97,7 +98,23 @@ export default function RecordPaymentScreen() {
           value={amount}
           onChangeText={setAmount}
           keyboardType="numeric"
+          selectTextOnFocus
         />
+
+        <View style={styles.quickActions}>
+          <TouchableOpacity 
+            style={styles.quickButton} 
+            onPress={() => setAmount((payment.expected_amount / 100).toString())}
+          >
+            <Text style={styles.quickButtonText}>Full Pay</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.quickButton, { backgroundColor: Colors.card }]} 
+            onPress={() => setAmount('')}
+          >
+            <Text style={[styles.quickButtonText, { color: Colors.textSecondary }]}>Clear</Text>
+          </TouchableOpacity>
+        </View>
 
         <TextField
           label="Notes (Optional)"
@@ -163,5 +180,21 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: Theme.spacing.xl,
-  }
+  },
+  quickActions: {
+    flexDirection: 'row',
+    marginBottom: Theme.spacing.lg,
+  },
+  quickButton: {
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.sm,
+    backgroundColor: Colors.secondary,
+    borderRadius: Theme.borderRadius.sm,
+    marginRight: Theme.spacing.md,
+  },
+  quickButtonText: {
+    color: Colors.textPrimary,
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
 });
