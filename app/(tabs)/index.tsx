@@ -1,29 +1,45 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Text } from 'react-native';
+import { StyleSheet, ScrollView, View, Text, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
-import { StatCard, EmptyState } from '../../src/components/ui';
-import { getDatabase, ChitRepository, MemberRepository, Chit } from '../../src/database';
+import { StatCard, EmptyState, Button } from '../../src/components/ui';
+import { getDatabase, ChitRepository, MemberRepository, RoundRepository, Chit } from '../../src/database';
+import { ChitService } from '../../src/services/chitService';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
   const [memberCount, setMemberCount] = useState(0);
+  const [currentMonth, setCurrentMonth] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
       const db = await getDatabase();
       const chitRepo = new ChitRepository(db);
       const memberRepo = new MemberRepository(db);
+      const roundRepo = new RoundRepository(db);
       
       const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
       
       if (chit) {
-        const members = await memberRepo.getMembersByChit(chit.id);
+        const [members, rounds] = await Promise.all([
+          memberRepo.getMembersByChit(chit.id),
+          roundRepo.getRoundsByChit(chit.id)
+        ]);
+        
         setMemberCount(members.length);
+        
+        if (rounds.length > 0) {
+          // Find current month (max month number)
+          const maxMonth = rounds.reduce((max, r) => Math.max(max, r.month_number), 0);
+          setCurrentMonth(maxMonth);
+        } else {
+          setCurrentMonth(0);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -37,6 +53,22 @@ export default function DashboardScreen() {
       loadData();
     }, [loadData])
   );
+
+  const handleStartFund = async () => {
+    if (!activeChit) return;
+    setStarting(true);
+    try {
+      const db = await getDatabase();
+      const service = new ChitService(db);
+      await service.startChitFund(activeChit.id);
+      Alert.alert('Success', 'Chit Fund started! Month 1 details recorded for the organizer.');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to start chit fund');
+    } finally {
+      setStarting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -78,7 +110,7 @@ export default function DashboardScreen() {
       <View style={styles.statsRow}>
         <StatCard 
           label="Current Month" 
-          value="1 / 20" 
+          value={`${currentMonth || '-'} / ${activeChit.duration_months}`} 
           icon="calendar-outline" 
         />
         <StatCard 
@@ -89,13 +121,30 @@ export default function DashboardScreen() {
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Setup Status</Text>
+      <Text style={styles.sectionTitle}>{currentMonth === 0 ? 'Setup Status' : 'Active Chit Status'}</Text>
       <View style={styles.setupCard}>
-        <Text style={styles.setupText}>
-          {memberCount < activeChit.member_count 
-            ? `Please add ${activeChit.member_count - memberCount} more members to complete the group setup.`
-            : "Setup complete! Ready to start the first month's collection (Month 1)."}
-        </Text>
+        {currentMonth === 0 ? (
+          <>
+            <Text style={styles.setupText}>
+              {memberCount < activeChit.member_count 
+                ? `Please add ${activeChit.member_count - memberCount} more members to complete the group setup.`
+                : "Setup complete! All 20 members are registered. You can now formally start the chit fund."}
+            </Text>
+            {memberCount === activeChit.member_count && (
+              <Button 
+                title="Start Month 1" 
+                onPress={handleStartFund} 
+                loading={starting}
+                style={styles.actionButton}
+              />
+            )}
+          </>
+        ) : (
+          <Text style={styles.setupText}>
+            The chit fund is active. Month {currentMonth} is currently in progress. 
+            Check the Auction tab to record results or Payment tab to track collections.
+          </Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -143,5 +192,8 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 16,
     lineHeight: 22,
+  },
+  actionButton: {
+    marginTop: Theme.spacing.lg,
   },
 });
