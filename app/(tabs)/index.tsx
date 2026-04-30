@@ -15,6 +15,7 @@ export default function DashboardScreen() {
   const [currentMonth, setCurrentMonth] = useState(0);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [financials, setFinancials] = useState({
     totalExpected: 0,
     totalOutstanding: 0,
     winnerCount: 0
