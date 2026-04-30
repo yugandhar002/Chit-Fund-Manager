@@ -151,32 +151,35 @@ export default function AuctionScreen() {
           />
         </Card>
       ) : (
-      {auctions.map((auction, index) => (
-        <View key={auction.id} style={styles.resultContainer}>
-          <Text style={styles.sectionTitle}>
-            {auction.auction_number === 1 ? 'Auction Result' : `Auction #${auction.auction_number} Result`}
-          </Text>
-          <Card style={styles.resultCard}>
-            <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Winner</Text>
-              <Text style={styles.winnerName}>{auction.winner_name || 'Unknown'}</Text>
+        <>
+          {auctions.map((auction, index) => (
+            <View key={auction.id} style={styles.resultContainer}>
+              <Text style={styles.sectionTitle}>
+                {auction.auction_number === 1 ? 'Auction Result' : `Auction #${auction.auction_number} Result`}
+              </Text>
+              <Card style={styles.resultCard}>
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>Winner</Text>
+                  <Text style={styles.winnerName}>{auction.winner_name || 'Unknown'}</Text>
+                </View>
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>Highest Bid (Commission)</Text>
+                  <Text style={styles.resultValuePaisa}>₹{(auction.commission_amount / 100).toLocaleString()}</Text>
+                </View>
+                <View style={styles.separator} />
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>Dividend per Member</Text>
+                  <Text style={styles.dividendValue}>₹{(auction.dividend_per_member / 100).toLocaleString()}</Text>
+                </View>
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>Payout to Winner</Text>
+                  <Text style={styles.payoutValue}>₹{(auction.payout_amount / 100).toLocaleString()}</Text>
+                </View>
+              </Card>
             </View>
-            <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Highest Bid (Commission)</Text>
-              <Text style={styles.resultValuePaisa}>₹{(auction.commission_amount / 100).toLocaleString()}</Text>
-            </View>
-            <View style={styles.separator} />
-            <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Dividend per Member</Text>
-              <Text style={styles.dividendValue}>₹{(auction.dividend_per_member / 100).toLocaleString()}</Text>
-            </View>
-            <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>Payout to Winner</Text>
-              <Text style={styles.payoutValue}>₹{(auction.payout_amount / 100).toLocaleString()}</Text>
-            </View>
-          </Card>
-        </View>
-      ))}
+          ))}
+        </>
+      )}
 
       {currentRound.status === 'pending' && auctions.length > 0 && (
         <Button 
