@@ -54,7 +54,7 @@
 - Monthly collection summary
 
 ### Phase 5: Dashboard & Reports
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Build the home dashboard with at-a-glance chit status, monthly summaries, member completion tracking, and financial reports.
 **Deliverables**:
 - Home dashboard with chit progress overview
