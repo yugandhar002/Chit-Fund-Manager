@@ -15,13 +15,9 @@ export default function DashboardScreen() {
   const [currentMonth, setCurrentMonth] = useState(0);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
-  const [financials, setFinancials] = useState({
-    totalCommission: 0,
-    totalCollected: 0,
     totalExpected: 0,
     totalOutstanding: 0,
-    winnerCount: 0,
-    availablePatas: 0
+    winnerCount: 0
   });
 
   const loadData = useCallback(async () => {
@@ -167,16 +163,8 @@ export default function DashboardScreen() {
             >
               <View style={[styles.iconBox, { backgroundColor: Colors.secondary + '20' }]}>
                 <Text style={styles.actionIcon}>🔨</Text>
-                {financials.availablePatas > 0 && (
-                  <View style={styles.badgeContainer}>
-                    <Text style={styles.badgeText}>{financials.availablePatas}</Text>
-                  </View>
-                )}
               </View>
               <Text style={styles.actionLabel}>Auction</Text>
-              {financials.availablePatas > 0 && (
-                <Text style={styles.availableSubtext}>{financials.availablePatas} Pata Available</Text>
-              )}
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.actionItem}
@@ -200,17 +188,7 @@ export default function DashboardScreen() {
         )}
       </View>
 
-      {financials.availablePatas > 0 && (
-        <Card style={styles.pataNotice}>
-          <Ionicons name="information-circle" size={24} color={Colors.secondary} />
-          <View style={styles.noticeContent}>
-            <Text style={styles.noticeTitle}>Extra Pata Available!</Text>
-            <Text style={styles.noticeMessage}>
-              You have {financials.availablePatas} extra auction(s) funded by commission. You can record them now.
-            </Text>
-          </View>
-        </Card>
-      )}
+
     </ScrollView>
   );
 }

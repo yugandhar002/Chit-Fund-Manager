@@ -16,7 +16,6 @@ export default function AuctionScreen() {
   const [auctions, setAuctions] = useState<(Auction & { winner_name?: string })[]>([]);
   const [history, setHistory] = useState<(Auction & { winner_name: string, month_number: number })[]>([]);
   const [processing, setProcessing] = useState(false);
-  const [availablePatas, setAvailablePatas] = useState(0);
 
   const loadData = useCallback(async () => {
     try {
@@ -38,14 +37,12 @@ export default function AuctionScreen() {
         setCurrentRound(latest || null);
         
         if (latest) {
-          const [auctionList, historyList, pataCount] = await Promise.all([
+          const [auctionList, historyList] = await Promise.all([
             auctionRepo.getAuctionsByRound(latest.id),
-            auctionRepo.getAuctionHistory(chit.id),
-            service.getAvailablePatasCount(chit.id)
+            auctionRepo.getAuctionHistory(chit.id)
           ]);
           setAuctions(auctionList);
           setHistory(historyList);
-          setAvailablePatas(pataCount);
         }
       }
     } catch (e) {
@@ -192,24 +189,7 @@ export default function AuctionScreen() {
         />
       )}
 
-      {currentRound.status === 'pending' && availablePatas > 0 && (
-        <Card style={[styles.actionCard, { borderColor: Colors.secondary, borderStyle: 'solid', marginTop: Theme.spacing.xl }]}>
-          <Text style={[styles.hintText, { color: Colors.secondary, fontWeight: 'bold' }]}>
-            {availablePatas} EXTRA PATA AVAILABLE!
-          </Text>
-          <Text style={styles.hintText}>
-            You have funded {availablePatas} extra auction(s). You can record the next one now.
-          </Text>
-          <Button 
-            title={`Record Auction #${auctions.length + 1}`} 
-            onPress={() => router.push({ 
-              pathname: '/record-auction', 
-              params: { roundId: currentRound.id, auctionNumber: (auctions.length + 1).toString() } 
-            })}
-            style={styles.recordButton}
-          />
-        </Card>
-      )}
+
 
       {currentRound.status === 'completed' && activeChit.duration_months > currentRound.month_number && (
         <View style={styles.nextStepContainer}>

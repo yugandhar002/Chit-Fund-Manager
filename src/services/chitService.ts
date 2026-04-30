@@ -111,52 +111,13 @@ export class ChitService {
 
   async recordAuctionResult(chitId: number, data: any): Promise<number> {
     const auctionRepo = new AuctionRepository(this.db);
-    const roundRepo = new RoundRepository(this.db);
     const chitRepo = new ChitRepository(this.db);
 
     const chit = await chitRepo.getChitById(chitId);
     if (!chit) throw new Error('Chit not found');
 
     const auctionId = await auctionRepo.recordAuction(data);
-    const roundRepo = new RoundRepository(this.db);
-
-    // Check for double-pata: when cumulative commission reaches total chit value
-    // This now just flags the round as double-pata for UI/Reporting.
-    const cumulative = await auctionRepo.getCumulativeCommission(chitId);
-    if (cumulative >= chit.total_value) {
-      await roundRepo.markAsDoublePata(data.round_id);
-    }
-
     return auctionId;
-  }
-
-  async getAvailablePatasCount(chitId: number): Promise<number> {
-    const chitRepo = new ChitRepository(this.db);
-    const auctionRepo = new AuctionRepository(this.db);
-    
-    const chit = await chitRepo.getChitById(chitId);
-    if (!chit) return 0;
-
-    const cumulative = await auctionRepo.getCumulativeCommission(chitId);
-    const winners = await auctionRepo.getWinners(chitId);
-    
-    // Total auctions that SHOULD have happened vs those that DID happen
-    // In a 20-month chit, there are 20 "natural" auctions.
-    // If cumulative commission >= total_value, we get 1 extra.
-    // If cumulative commission >= 2 * total_value, we get 2 extra, etc.
-    
-    const extraPatasEarned = Math.floor(cumulative / chit.total_value);
-    
-    // Total auctions recorded so far
-    const totalAuctionsHeld = winners.length;
-    
-    // Current month (natural auctions elapsed)
-    const roundRepo = new RoundRepository(this.db);
-    const rounds = await roundRepo.getRoundsByChit(chitId);
-    const naturalAuctionsElapsed = rounds.length;
-
-    // Available = (Natural + Extra) - Held
-    return (naturalAuctionsElapsed + extraPatasEarned) - totalAuctionsHeld;
   }
 
   async addPaymentTransaction(paymentId: number, newAmount: number, notes?: string): Promise<void> {
@@ -188,12 +149,11 @@ export class ChitService {
     const paymentRepo = new PaymentRepository(this.db);
     const roundRepo = new RoundRepository(this.db);
 
-    const [cumulativeCommission, financials, winners, rounds, availablePatas] = await Promise.all([
+    const [cumulativeCommission, financials, winners, rounds] = await Promise.all([
       auctionRepo.getCumulativeCommission(chitId),
       paymentRepo.getOverallFinancials(chitId),
       auctionRepo.getWinners(chitId),
-      roundRepo.getRoundsByChit(chitId),
-      this.getAvailablePatasCount(chitId)
+      roundRepo.getRoundsByChit(chitId)
     ]);
 
     const currentMonth = rounds.length > 0 
@@ -206,8 +166,7 @@ export class ChitService {
       totalExpected: financials.total_expected,
       totalOutstanding: financials.total_expected - financials.total_paid,
       winnerCount: winners.length,
-      currentMonth,
-      availablePatas
+      currentMonth
     };
   }
 }
