@@ -177,6 +177,7 @@ export class ChitService {
     const auctionRepo = new AuctionRepository(this.db);
     const paymentRepo = new PaymentRepository(this.db);
     const roundRepo = new RoundRepository(this.db);
+    const memberRepo = new MemberRepository(this.db);
 
     const [cumulativeCommission, financials, winners, rounds, availablePatas, members] = await Promise.all([
       auctionRepo.getCumulativeCommission(chitId),
