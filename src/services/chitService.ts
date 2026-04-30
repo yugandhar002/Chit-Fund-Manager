@@ -76,7 +76,7 @@ export class ChitService {
 
     const nextMonth = maxMonth + 1;
     
-    return await roundRepo.createRound({
+    const roundId = await roundRepo.createRound({
       chit_id: chitId,
       month_number: nextMonth,
       round_date: null,
@@ -84,6 +84,29 @@ export class ChitService {
       is_double_pata: 0,
       status: 'pending',
     });
+
+    // Create payment entries immediately for 'Collection First' logic
+    const paymentRepo = new PaymentRepository(this.db);
+    const memberRepo = new MemberRepository(this.db);
+    const auctionRepo = new AuctionRepository(this.db);
+    
+    let expectedAmount = chit.monthly_contribution;
+    
+    if (nextMonth > 1) {
+      // Find the round for (nextMonth - 1)
+      const prevRound = currentRounds.find(r => r.month_number === maxMonth);
+      if (prevRound) {
+        // Sum dividends from all auctions in the previous month
+        const prevAuctions = await auctionRepo.getAuctionsByRound(prevRound.id);
+        const totalPrevDividend = prevAuctions.reduce((sum, a) => sum + a.dividend_per_member, 0);
+        expectedAmount = chit.monthly_contribution - totalPrevDividend;
+      }
+    }
+
+    const members = await memberRepo.getMembersByChit(chitId);
+    await paymentRepo.createPaymentEntries(roundId, members.map(m => m.id), expectedAmount);
+
+    return roundId;
   }
 
   async recordAuctionResult(chitId: number, data: any): Promise<number> {
@@ -95,23 +118,10 @@ export class ChitService {
     if (!chit) throw new Error('Chit not found');
 
     const auctionId = await auctionRepo.recordAuction(data);
-
-    const paymentRepo = new PaymentRepository(this.db);
-    const memberRepo = new MemberRepository(this.db);
-    
-    // Generate or update payment entries
-    const existingPayments = await paymentRepo.getPaymentsByRound(data.round_id);
-    if (existingPayments.length === 0) {
-      const members = await memberRepo.getMembersByChit(chitId);
-      await paymentRepo.createPaymentEntries(data.round_id, members.map(m => m.id), data.effective_contribution);
-    } else {
-      // Adjustment for double-pata (second auction)
-      // The expected amount for everyone should be reduced by the new dividend
-      const newExpected = existingPayments[0].expected_amount - data.dividend_per_member;
-      await paymentRepo.updateExpectedAmountsForRound(data.round_id, newExpected);
-    }
+    const roundRepo = new RoundRepository(this.db);
 
     // Check for double-pata: when cumulative commission reaches total chit value
+    // This now just flags the round as double-pata for UI/Reporting.
     const cumulative = await auctionRepo.getCumulativeCommission(chitId);
     if (cumulative >= chit.total_value) {
       await roundRepo.markAsDoublePata(data.round_id);
