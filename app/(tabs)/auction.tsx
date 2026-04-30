@@ -6,6 +6,7 @@ import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge, StatCard } from '../../src/components/ui';
 import { getDatabase, RoundRepository, AuctionRepository, ChitRepository, MonthlyRound, Auction, Chit } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
+import { useChit } from '../../src/context/ChitContext';
 import { Alert } from 'react-native';
 
 export default function AuctionScreen() {

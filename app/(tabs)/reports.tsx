@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { Card, Badge, EmptyState } from '../../src/components/ui';
-import { getDatabase, ChitRepository, Chit } from '../../src/database';
+import { getDatabase, ChitRepository, MemberRepository, PaymentRepository, AuctionRepository, Chit } from '../../src/database';
 import { useChit } from '../../src/context/ChitContext';
 import { ChitService } from '../../src/services/chitService';
 
