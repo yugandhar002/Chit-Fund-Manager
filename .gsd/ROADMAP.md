@@ -62,3 +62,13 @@
 - Member completion status (who finished, who's remaining)
 - Commission history across all months
 - Overall financial summary
+
+### Phase 6: Multi-Pata Management
+**Status**: ⬜ Not Started
+**Objective**: Enable recording and managing multiple auctions in a single month (N-patas) with adjusted financial tracking.
+**Deliverables**:
+- Multi-auction recording UI
+- Cumulative dividend adjustment logic
+- Dashboard "Patas Available" indicator
+- Grouped auction history in Reports
+
