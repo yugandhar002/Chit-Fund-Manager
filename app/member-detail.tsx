@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card, Badge } from '../src/components/ui';
-import { getDatabase, MemberRepository, Member } from '../src/database';
+import { getDatabase, MemberRepository, PaymentRepository, Member, Payment } from '../src/database';
 
 export default function MemberDetailScreen() {
   const router = useRouter();
@@ -21,6 +21,7 @@ export default function MemberDetailScreen() {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [isOrganizer, setIsOrganizer] = useState(false);
+  const [history, setHistory] = useState<(Payment & { month_number: number })[]>([]);
 
   useEffect(() => {
     async function loadMember() {
@@ -28,14 +29,21 @@ export default function MemberDetailScreen() {
       try {
         const db = await getDatabase();
         const memberRepo = new MemberRepository(db);
-        const data = await memberRepo.getMemberById(parseInt(id));
-        if (data) {
-          setMember(data);
-          setName(data.name);
-          setPhone(data.phone || '');
-          setAddress(data.address || '');
-          setIsOrganizer(data.is_organizer === 1);
+        const paymentRepo = new PaymentRepository(db);
+        
+        const [memberData, historyData] = await Promise.all([
+          memberRepo.getMemberById(parseInt(id)),
+          paymentRepo.getPaymentsByMember(parseInt(id))
+        ]);
+
+        if (memberData) {
+          setMember(memberData);
+          setName(memberData.name);
+          setPhone(memberData.phone || '');
+          setAddress(memberData.address || '');
+          setIsOrganizer(memberData.is_organizer === 1);
         }
+        setHistory(historyData);
       } catch (e) {
         console.error(e);
         Alert.alert('Error', 'Failed to load member details');
@@ -168,9 +176,28 @@ export default function MemberDetailScreen() {
       </Card>
       
       <Text style={styles.sectionTitle}>Payment History</Text>
-      <Card style={styles.historyPlaceholder}>
-        <Text style={styles.placeholderText}>History will appear after auctions start (Phase 4)</Text>
-      </Card>
+      {history.length > 0 ? (
+        history.map((item) => (
+          <Card key={item.id} style={styles.historyCard}>
+            <View style={styles.historyRow}>
+              <View>
+                <Text style={styles.historyMonth}>Month {item.month_number}</Text>
+                <Text style={styles.historyAmount}>
+                  ₹{(item.paid_amount / 100).toLocaleString()} / ₹{(item.expected_amount / 100).toLocaleString()}
+                </Text>
+              </View>
+              <Badge 
+                label={item.status.toUpperCase()} 
+                variant={item.status === 'paid' ? 'success' : item.status === 'partial' ? 'warning' : 'info'} 
+              />
+            </View>
+          </Card>
+        ))
+      ) : (
+        <Card style={styles.historyPlaceholder}>
+          <Text style={styles.placeholderText}>No payments recorded yet.</Text>
+        </Card>
+      )}
     </ScrollView>
   );
 }
@@ -290,5 +317,24 @@ const styles = StyleSheet.create({
     color: Colors.error,
     textAlign: 'center',
     marginTop: Theme.spacing.massive,
-  }
+  },
+  historyCard: {
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyMonth: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  historyAmount: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    marginTop: 2,
+  },
 });
