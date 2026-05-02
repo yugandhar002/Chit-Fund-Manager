@@ -61,7 +61,7 @@ export default function SwitchBatchScreen() {
               await repo.deleteChit(id);
               loadData();
             } catch (e: any) {
-              Alert.alert('Error', e.message || 'Failed to delete chit fund');
+              console.error('Failed to delete chit fund:', e.message);
             }
           }
         }

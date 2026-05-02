@@ -44,9 +44,8 @@ export default function MemberDetailScreen() {
         }
         setHistory(historyData);
       } catch (e) {
-        console.error(e);
-        Alert.alert('Error', 'Failed to load member details');
-      } finally {
+      console.error('Failed to load member:', e);
+    } finally {
         setLoading(false);
       }
     }
@@ -54,61 +53,39 @@ export default function MemberDetailScreen() {
   }, [id]);
 
   const handleUpdate = async () => {
-    if (!name.trim()) {
-      Alert.alert('Error', 'Name is required');
+    if (!name.trim() || !member) {
       return;
     }
 
     setSaving(true);
     try {
-      const memberRepo = new MemberRepository();
-      await memberRepo.updateMember(parseInt(id!), {
-        name: name.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
-        is_organizer: isOrganizer ? 1 : 0,
-      });
-      
-      setMember(prev => prev ? { 
-        ...prev, 
+      const repo = new MemberRepository();
+      await repo.updateMember(member.id, { 
         name: name.trim(), 
         phone: phone.trim(), 
         address: address.trim(), 
         is_organizer: isOrganizer ? 1 : 0 
-      } : null);
-      
-      setIsEditing(false);
-      Alert.alert('Success', 'Member updated successfully');
+      });
+      router.back();
     } catch (e) {
-      console.error(e);
-      Alert.alert('Error', 'Failed to update member');
+      console.error('Failed to update member:', e);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Member',
-      'Are you sure you want to remove this member? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const memberRepo = new MemberRepository();
-              await memberRepo.deleteMember(parseInt(id!));
-              router.back();
-            } catch (e) {
-              console.error(e);
-              Alert.alert('Error', 'Failed to delete member');
-            }
-          }
-        }
-      ]
-    );
+  const handleDelete = async () => {
+    if (!member) return;
+    setSaving(true);
+    try {
+      const repo = new MemberRepository();
+      await repo.deleteMember(member.id);
+      router.back();
+    } catch (e) {
+      console.error('Failed to delete member:', e);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <View style={styles.container} />;

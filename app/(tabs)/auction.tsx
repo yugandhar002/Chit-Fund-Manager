@@ -83,10 +83,9 @@ export default function AuctionScreen() {
     try {
       const service = new ChitService();
       await service.concludeCurrentRound(currentRound.id);
-      Alert.alert('Success', `Month ${currentRound.month_number} concluded.`);
       loadData();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to conclude month');
+      console.error('Failed to conclude month:', e.message);
     } finally {
       setProcessing(false);
     }
@@ -97,37 +96,23 @@ export default function AuctionScreen() {
     setProcessing(true);
     try {
       const service = new ChitService();
-      const nextRoundId = await service.startNextRound(activeChit.id);
-      Alert.alert('Success', 'Next month started. Payment entries created at full amount.');
+      await service.startNextRound(activeChit.id);
       loadData();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to start next month');
+      console.error('Failed to start next month:', e.message);
     } finally {
       setProcessing(false);
     }
   };
 
   const handleMarkRefunded = async (paymentId: number, memberName: string) => {
-    Alert.alert(
-      'Confirm Refund',
-      `Mark ${memberName}'s overpayment as refunded?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Yes, Refunded', 
-          onPress: async () => {
-            try {
-              const service = new ChitService();
-              await service.markMemberRefunded(paymentId);
-              Alert.alert('Done', `${memberName} marked as refunded.`);
-              loadData();
-            } catch (e: any) {
-              Alert.alert('Error', e.message || 'Failed to mark as refunded');
-            }
-          }
-        }
-      ]
-    );
+    try {
+      const service = new ChitService();
+      await service.markMemberRefunded(paymentId);
+      loadData();
+    } catch (e: any) {
+      console.error('Failed to mark as refunded:', e.message);
+    }
   };
 
   if (loading) return <View style={styles.container} />;

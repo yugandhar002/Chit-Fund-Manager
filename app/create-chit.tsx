@@ -27,12 +27,10 @@ export default function CreateChitScreen() {
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a chit name');
       return;
     }
 
     if (totalValuePaisa <= 0 || memberCountInt <= 0) {
-      Alert.alert('Error', 'Please enter valid numbers');
       return;
     }
 
@@ -50,12 +48,9 @@ export default function CreateChitScreen() {
         status: 'active',
       });
 
-      Alert.alert('Success', 'Chit Fund created successfully!', [
-        { text: 'OK', onPress: () => router.replace('/') }
-      ]);
+      router.replace('/');
     } catch (e) {
-      console.error(e);
-      Alert.alert('Error', 'Failed to create chit fund');
+      console.error('Failed to create chit:', e);
     } finally {
       setLoading(false);
     }

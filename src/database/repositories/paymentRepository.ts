@@ -129,7 +129,7 @@ export class PaymentRepository {
     return { total_expected, total_paid };
   }
 
-  async getOutstandingDuesByMember(chitId: number): Promise<{ member_id: number, member_name: string, total_due: number }[]> {
+  async getOutstandingDuesByMember(chitId: number): Promise<{ member_id: number, member_name: string, total_due: number, total_overpaid: number, net_due: number }[]> {
     const { data: rounds, error: roundsError } = await supabase
       .from('monthly_rounds')
       .select('id')
@@ -146,24 +146,37 @@ export class PaymentRepository {
 
     if (error) throw error;
 
-    const duesMap = new Map<number, { member_id: number, member_name: string, total_due: number }>();
+    const duesMap = new Map<number, { member_id: number, member_name: string, total_due: number, total_overpaid: number, net_due: number }>();
     
     data?.forEach((p: any) => {
-      const due = (p.expected_amount || 0) - (p.paid_amount || 0);
-      if (due > 0) {
-        if (!duesMap.has(p.member_id)) {
-          duesMap.set(p.member_id, {
-            member_id: p.member_id,
-            member_name: p.members?.name || 'Unknown',
-            total_due: 0
-          });
-        }
-        duesMap.get(p.member_id)!.total_due += due;
+      const balance = (p.expected_amount || 0) - (p.paid_amount || 0);
+      
+      if (!duesMap.has(p.member_id)) {
+        duesMap.set(p.member_id, {
+          member_id: p.member_id,
+          member_name: p.members?.name || 'Unknown',
+          total_due: 0,
+          total_overpaid: 0,
+          net_due: 0
+        });
       }
+      
+      const record = duesMap.get(p.member_id)!;
+      
+      if (balance > 0) {
+        record.total_due += balance;
+      } else if (balance < 0) {
+        record.total_overpaid += Math.abs(balance);
+      }
+      
+      record.net_due += balance;
     });
 
-    const result = Array.from(duesMap.values());
-    return result.sort((a, b) => b.total_due - a.total_due);
+    // Only return members who have some outstanding or overpaid balance
+    const result = Array.from(duesMap.values()).filter(m => m.net_due !== 0 || m.total_due > 0 || m.total_overpaid > 0);
+    
+    // Sort by net due descending (those who owe the most at top)
+    return result.sort((a, b) => b.net_due - a.net_due);
   }
 
   async addTransaction(paymentId: number, amount: number, notes?: string): Promise<void> {

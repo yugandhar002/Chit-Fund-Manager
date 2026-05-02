@@ -10,7 +10,7 @@ export default function ReportsScreen() {
   const [loading, setLoading] = useState(true);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
   const [winners, setWinners] = useState<number[]>([]);
-  const [outstanding, setOutstanding] = useState<{ member_id: number, member_name: string, total_due: number }[]>([]);
+  const [outstanding, setOutstanding] = useState<{ member_id: number, member_name: string, total_due: number, total_overpaid: number, net_due: number }[]>([]);
   const [commissionHistory, setCommissionHistory] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
 
@@ -100,21 +100,46 @@ export default function ReportsScreen() {
         </View>
       </Card>
 
-      <Text style={styles.sectionTitle}>Outstanding Dues</Text>
-      {outstanding.length > 0 ? (
-        outstanding.map(item => (
-          <Card key={item.member_id} style={styles.dueCard}>
-            <View style={styles.dueRow}>
-              <Text style={styles.dueMemberName}>{item.member_name}</Text>
-              <Text style={styles.dueAmount}>₹{(item.total_due / 100).toLocaleString()}</Text>
-            </View>
-          </Card>
-        ))
-      ) : (
-        <Card style={styles.emptyCard}>
+      <Text style={styles.sectionTitle}>Outstanding Dues Summary</Text>
+      <Card style={styles.reportCard}>
+        {outstanding.length > 0 ? (
+          outstanding.map((item, index) => {
+            const hasBreakdown = item.total_due > 0 && item.total_overpaid > 0;
+            return (
+              <View key={item.member_id} style={[
+                styles.simpleDueRow, 
+                index !== outstanding.length - 1 && styles.borderBottom
+              ]}>
+                <View style={styles.dueInfoCol}>
+                  <Text style={styles.dueMemberName}>{item.member_name}</Text>
+                  {hasBreakdown && (
+                    <Text style={styles.dueSubText}>
+                      Due: ₹{(item.total_due / 100).toLocaleString()} | Refund: ₹{(item.total_overpaid / 100).toLocaleString()}
+                    </Text>
+                  )}
+                </View>
+                
+                <View style={styles.dueAmountCol}>
+                  <Text style={[
+                    styles.netAmountLabel, 
+                    { color: item.net_due > 0 ? Colors.error : Colors.warning }
+                  ]}>
+                    {item.net_due > 0 ? 'OWES' : 'TO BE REFUNDED'}
+                  </Text>
+                  <Text style={[
+                    styles.netAmountValueSimple, 
+                    { color: item.net_due > 0 ? Colors.error : Colors.warning }
+                  ]}>
+                    ₹{(Math.abs(item.net_due) / 100).toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        ) : (
           <Text style={styles.emptyText}>All members have cleared their dues!</Text>
-        </Card>
-      )}
+        )}
+      </Card>
 
       <Text style={styles.sectionTitle}>Commission History</Text>
       <Card style={styles.historyCard}>
@@ -210,22 +235,38 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
   },
-  dueCard: {
-    padding: Theme.spacing.md,
-    marginBottom: Theme.spacing.sm,
-  },
-  dueRow: {
+  simpleDueRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: Theme.spacing.md,
+  },
+  borderBottom: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  dueInfoCol: {
+    flex: 1,
   },
   dueMemberName: {
     color: Colors.textPrimary,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
-  dueAmount: {
-    color: Colors.error,
+  dueSubText: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  dueAmountCol: {
+    alignItems: 'flex-end',
+  },
+  netAmountLabel: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  netAmountValueSimple: {
     fontSize: 16,
     fontWeight: 'bold',
   },

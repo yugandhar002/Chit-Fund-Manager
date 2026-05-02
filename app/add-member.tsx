@@ -32,12 +32,10 @@ export default function AddMemberScreen() {
 
   const handleAdd = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a name');
       return;
     }
 
     if (!activeChit) {
-      Alert.alert('Error', 'No active chit fund found');
       return;
     }
 
@@ -53,13 +51,9 @@ export default function AddMemberScreen() {
         is_organizer: isOrganizer ? 1 : 0,
         status: 'active',
       });
-
-      Alert.alert('Success', 'Member added successfully!', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      router.back();
     } catch (e) {
-      console.error(e);
-      Alert.alert('Error', 'Failed to add member');
+      console.error('Failed to add member:', e);
     } finally {
       setLoading(false);
     }

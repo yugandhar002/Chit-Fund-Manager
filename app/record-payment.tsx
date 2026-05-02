@@ -60,24 +60,10 @@ export default function RecordPaymentScreen() {
     const paidAmountPaisa = Math.round(parseFloat(amount) * 100);
     
     if (isNaN(paidAmountPaisa) || paidAmountPaisa === 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
       return;
     }
 
-    // For negative amounts (refunds), confirm with user
-    if (paidAmountPaisa < 0) {
-      const refundAmt = Math.abs(paidAmountPaisa);
-      Alert.alert(
-        'Confirm Refund',
-        `Refund ₹${(refundAmt / 100).toLocaleString()} to ${member?.name}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Yes, Refund', onPress: () => processTransaction(paidAmountPaisa) }
-        ]
-      );
-      return;
-    }
-
+    // For negative amounts (refunds), confirm removed as per user request
     await processTransaction(paidAmountPaisa);
   };
 
@@ -87,13 +73,9 @@ export default function RecordPaymentScreen() {
     try {
       const service = new ChitService();
       await service.addPaymentTransaction(payment.id, paidAmountPaisa, notes);
-      
-      const msg = paidAmountPaisa < 0 ? 'Refund recorded successfully' : 'Payment recorded successfully';
-      Alert.alert('Success', msg, [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      router.back();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to record payment');
+      console.error('Failed to record payment:', e.message);
     } finally {
       setSaving(false);
     }

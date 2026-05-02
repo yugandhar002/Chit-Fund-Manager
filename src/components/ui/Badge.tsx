@@ -8,9 +8,10 @@ type BadgeVariant = 'success' | 'warning' | 'error' | 'danger' | 'info' | 'defau
 interface BadgeProps {
   label: string;
   variant?: BadgeVariant;
+  style?: any;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ label, variant = 'default' }) => {
+export const Badge: React.FC<BadgeProps> = ({ label, variant = 'default', style }) => {
   const getVariantStyles = () => {
     switch (variant) {
       case 'success':
@@ -30,7 +31,7 @@ export const Badge: React.FC<BadgeProps> = ({ label, variant = 'default' }) => {
   const { bg, text } = getVariantStyles();
 
   return (
-    <View style={[styles.container, { backgroundColor: bg }]}>
+    <View style={[styles.container, { backgroundColor: bg }, style]}>
       <Text style={[styles.text, { color: text }]}>{label}</Text>
     </View>
   );

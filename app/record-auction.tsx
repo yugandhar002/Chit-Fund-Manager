@@ -62,11 +62,9 @@ export default function RecordAuctionScreen() {
 
   const handleRecord = async () => {
     if (!selectedWinner) {
-      Alert.alert('Error', 'Please select a winner');
       return;
     }
-    if (!commission.trim() || commissionPaisa <= 0) {
-      Alert.alert('Error', 'Please enter a valid commission amount');
+    if (isNaN(commissionPaisa) || commissionPaisa < 0) {
       return;
     }
 
@@ -75,7 +73,7 @@ export default function RecordAuctionScreen() {
       const service = new ChitService();
       
       // Use the new method that records auction AND recalculates same-month payments
-      const result = await service.recordAuctionAndRecalculate(activeChit!.id, {
+      await service.recordAuctionAndRecalculate(activeChit!.id, {
         round_id: parseInt(roundId!),
         winner_member_id: selectedWinner.id,
         commission_amount: commissionPaisa,
@@ -85,17 +83,9 @@ export default function RecordAuctionScreen() {
         auction_number: parseInt(auctionNumber || '1'),
       });
 
-      const overpaidCount = result.overpaidMembers.length;
-      const message = overpaidCount > 0 
-        ? `Auction recorded! ${overpaidCount} member(s) have overpaid and need refunds. Check the Auction tab for details.`
-        : 'Auction recorded and payment amounts updated for this month.';
-
-      Alert.alert('Success', message, [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      router.back();
     } catch (e) {
-      console.error(e);
-      Alert.alert('Error', 'Failed to record auction result');
+      console.error('Failed to record auction:', e);
     } finally {
       setSaving(false);
     }
