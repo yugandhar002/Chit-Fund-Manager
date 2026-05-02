@@ -5,19 +5,22 @@ import { BlurView } from 'expo-blur';
 import { Platform, StyleSheet } from 'react-native';
 import { Colors } from '../../src/constants/colors';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors.secondary,
         tabBarInactiveTintColor: Colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: Platform.OS === 'ios' ? 'transparent' : Colors.card,
+          backgroundColor: Colors.card,
           borderTopColor: Colors.border,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
-          position: 'absolute',
+          height: 60 + (insets.bottom > 0 ? insets.bottom - 10 : 10),
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+          paddingTop: 10,
         },
         tabBarBackground: () => 
           Platform.OS === 'ios' ? (

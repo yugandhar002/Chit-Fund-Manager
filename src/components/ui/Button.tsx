@@ -13,7 +13,7 @@ import { Theme } from '../../constants/theme';
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
@@ -35,6 +35,8 @@ export const Button: React.FC<ButtonProps> = ({
         return styles.secondary;
       case 'danger':
         return styles.danger;
+      case 'success':
+        return styles.success;
       case 'ghost':
         return styles.ghost;
       default:
@@ -83,6 +85,9 @@ const styles = StyleSheet.create({
   },
   danger: {
     backgroundColor: Colors.error,
+  },
+  success: {
+    backgroundColor: Colors.success,
   },
   ghost: {
     backgroundColor: Colors.transparent,

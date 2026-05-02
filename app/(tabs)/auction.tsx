@@ -180,6 +180,7 @@ export default function AuctionScreen() {
               <Button 
                 title="Conclude Month 1" 
                 onPress={handleConcludeMonth} 
+                variant="success"
                 loading={processing}
                 style={styles.recordButton}
               />
@@ -285,7 +286,7 @@ export default function AuctionScreen() {
               <Button 
                 title="Conclude Month" 
                 onPress={handleConcludeMonth} 
-                variant="secondary"
+                variant="success"
                 loading={processing}
                 style={styles.concludeButton}
               />
