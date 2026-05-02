@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
-import { getDatabase, PaymentRepository, MemberRepository, RoundRepository, Payment, Member, MonthlyRound } from '../src/database';
+import { PaymentRepository, MemberRepository, RoundRepository, Payment, Member, MonthlyRound } from '../src/database';
 import { ChitService } from '../src/services/chitService';
 
 export default function RecordPaymentScreen() {
@@ -26,10 +26,9 @@ export default function RecordPaymentScreen() {
     async function loadData() {
       if (!paymentId) return;
       try {
-        const db = await getDatabase();
-        const paymentRepo = new PaymentRepository(db);
-        const memberRepo = new MemberRepository(db);
-        const roundRepo = new RoundRepository(db);
+        const paymentRepo = new PaymentRepository();
+        const memberRepo = new MemberRepository();
+        const roundRepo = new RoundRepository();
         
         const p = await paymentRepo.getPaymentById(parseInt(paymentId));
         if (p) {
@@ -86,8 +85,7 @@ export default function RecordPaymentScreen() {
     if (!payment) return;
     setSaving(true);
     try {
-      const db = await getDatabase();
-      const service = new ChitService(db);
+      const service = new ChitService();
       await service.addPaymentTransaction(payment.id, paidAmountPaisa, notes);
       
       const msg = paidAmountPaisa < 0 ? 'Refund recorded successfully' : 'Payment recorded successfully';

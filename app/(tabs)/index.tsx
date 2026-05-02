@@ -1,37 +1,28 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity } from 'react-native';
+import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { StatCard, EmptyState, Button, Card } from '../../src/components/ui';
-import { getDatabase, ChitRepository, MemberRepository, RoundRepository, Chit } from '../../src/database';
+import { ChitRepository, MemberRepository, RoundRepository, Chit } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const [activeChit, setActiveChit] = useState<Chit | null>(null);
-  const [memberCount, setMemberCount] = useState(0);
-  const [currentMonth, setCurrentMonth] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [starting, setStarting] = useState(false);
-  const [financials, setFinancials] = useState({
-    totalCommission: 0,
-    totalCollected: 0,
-    totalExpected: 0,
-    totalOutstanding: 0,
-    winnerCount: 0
-  });
 
-  const loadData = useCallback(async () => {
-    try {
-      const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
-      const memberRepo = new MemberRepository(db);
-      const service = new ChitService(db);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      const chitRepo = new ChitRepository();
+      const memberRepo = new MemberRepository();
+      const service = new ChitService();
       
       const chit = await chitRepo.getActiveChit();
-      setActiveChit(chit);
       
       if (chit) {
         const [members, summary] = await Promise.all([
@@ -39,32 +30,45 @@ export default function DashboardScreen() {
           service.getFinancialSummary(chit.id)
         ]);
         
-        setMemberCount(members.length);
-        setFinancials(summary);
-        setCurrentMonth(summary.currentMonth);
+        return {
+          activeChit: chit,
+          memberCount: members.length,
+          financials: summary,
+          currentMonth: summary.currentMonth,
+          chitId: chit.id // Add this to track which chit is loaded
+        };
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return { activeChit: null, memberCount: 0, financials: null, currentMonth: 0, chitId: null };
+    },
+    staleTime: 1000 * 30, // Don't even background refresh if data is less than 30 seconds old
+    gcTime: 1000 * 60 * 60, // Keep in memory for 1 hour
+  });
+
+  const activeChit = data?.activeChit;
+  const memberCount = data?.memberCount || 0;
+  const financials = data?.financials || {
+    totalCommission: 0,
+    totalCollected: 0,
+    totalExpected: 0,
+    totalOutstanding: 0,
+    winnerCount: 0
+  };
+  const currentMonth = data?.currentMonth || 0;
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData])
+      refetch();
+    }, [refetch])
   );
 
   const handleStartFund = async () => {
     if (!activeChit) return;
     setStarting(true);
     try {
-      const db = await getDatabase();
-      const service = new ChitService(db);
+      const service = new ChitService();
       await service.startChitFund(activeChit.id);
       Alert.alert('Success', 'Month 1 started! Payment entries created for all members. Collect payments and then conclude when done.');
-      loadData();
+      refetch();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to start chit fund');
     } finally {
@@ -72,15 +76,18 @@ export default function DashboardScreen() {
     }
   };
 
-  if (loading) {
+  // 1. If we are truly loading for the VERY FIRST TIME (no cache), show a spinner
+  if (isLoading && !data) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.secondary} />
         <Text style={styles.loadingText}>Loading Dashboard...</Text>
       </View>
     );
   }
 
-  if (!activeChit) {
+  // 2. If we have finished loading (or have cache) but there really is no chit
+  if (!activeChit && !isLoading) {
     return (
       <View style={styles.container}>
         <EmptyState 
@@ -90,9 +97,19 @@ export default function DashboardScreen() {
           actionLabel="Create New Chit"
           onAction={() => router.push('/create-chit')}
         />
+        <TouchableOpacity 
+          style={[styles.switchButton, { alignSelf: 'center', marginTop: 20 }]}
+          onPress={() => router.push('/switch-batch')}
+        >
+          <Text style={{color: Colors.textPrimary, fontWeight: 'bold'}}>Switch Batch</Text>
+        </TouchableOpacity>
       </View>
     );
   }
+
+  // 3. Fallback: if we are still waiting for the very first result and have no cache, 
+  // or if we have data, we render the full UI.
+  if (!activeChit) return null;
 
   const progress = activeChit ? (currentMonth / activeChit.duration_months) : 0;
 
@@ -100,13 +117,21 @@ export default function DashboardScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
         <Text style={styles.headerTitle}>{activeChit.name}</Text>
-        <TouchableOpacity 
-          style={styles.newFundButton}
-          onPress={() => router.push('/create-chit')}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={Colors.secondary} />
-          <Text style={styles.newFundText}>New Fund</Text>
-        </TouchableOpacity>
+        <View style={{flexDirection: 'row', gap: 10, alignItems: 'center'}}>
+          <TouchableOpacity 
+            style={styles.switchButton}
+            onPress={() => router.push('/switch-batch')}
+          >
+            <Ionicons name="list-outline" size={20} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.newFundButton}
+            onPress={() => router.push('/create-chit')}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={Colors.secondary} />
+            <Text style={styles.newFundText}>New Fund</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.statsRow}>
@@ -202,7 +227,6 @@ export default function DashboardScreen() {
         )}
       </View>
 
-
     </ScrollView>
   );
 }
@@ -252,6 +276,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     marginLeft: 4,
+  },
+  switchButton: {
+    padding: 8,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   statsRow: {
     flexDirection: 'row',

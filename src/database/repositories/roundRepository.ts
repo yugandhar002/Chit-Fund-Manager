@@ -1,57 +1,74 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import { supabase } from '../supabase';
 import { MonthlyRound } from '../types';
 
 export class RoundRepository {
-  constructor(private db: SQLiteDatabase) {}
-
   async createRound(data: Omit<MonthlyRound, 'id' | 'created_at'>): Promise<number> {
-    const result = await this.db.runAsync(
-      `INSERT INTO monthly_rounds (chit_id, month_number, round_date, is_organizer_month, is_double_pata, status) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [data.chit_id, data.month_number, data.round_date || null, data.is_organizer_month, data.is_double_pata, data.status]
-    );
-    return result.lastInsertRowId;
+    const { data: result, error } = await supabase
+      .from('monthly_rounds')
+      .insert([data])
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return result.id;
   }
 
   async getRoundsByChit(chitId: number): Promise<MonthlyRound[]> {
-    return await this.db.getAllAsync<MonthlyRound>(
-      "SELECT * FROM monthly_rounds WHERE chit_id = ? ORDER BY month_number ASC",
-      [chitId]
-    );
+    const { data, error } = await supabase
+      .from('monthly_rounds')
+      .select('*')
+      .eq('chit_id', chitId)
+      .order('month_number', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
   }
 
   async getRoundById(id: number): Promise<MonthlyRound | null> {
-    return await this.db.getFirstAsync<MonthlyRound>(
-      "SELECT * FROM monthly_rounds WHERE id = ?",
-      [id]
-    );
+    const { data, error } = await supabase
+      .from('monthly_rounds')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
   }
 
   async getCurrentRound(chitId: number): Promise<MonthlyRound | null> {
-    return await this.db.getFirstAsync<MonthlyRound>(
-      "SELECT * FROM monthly_rounds WHERE chit_id = ? AND status = 'pending' ORDER BY month_number ASC LIMIT 1",
-      [chitId]
-    );
+    const { data, error } = await supabase
+      .from('monthly_rounds')
+      .select('*')
+      .eq('chit_id', chitId)
+      .eq('status', 'pending')
+      .order('month_number', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
   }
 
   async updateRoundStatus(id: number, status: 'pending' | 'completed', roundDate?: string): Promise<void> {
+    const updateData: any = { status };
     if (roundDate) {
-      await this.db.runAsync(
-        "UPDATE monthly_rounds SET status = ?, round_date = ? WHERE id = ?",
-        [status, roundDate, id]
-      );
-    } else {
-      await this.db.runAsync(
-        "UPDATE monthly_rounds SET status = ? WHERE id = ?",
-        [status, id]
-      );
+      updateData.round_date = roundDate;
     }
+
+    const { error } = await supabase
+      .from('monthly_rounds')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) throw error;
   }
 
   async markAsDoublePata(id: number): Promise<void> {
-    await this.db.runAsync(
-      "UPDATE monthly_rounds SET is_double_pata = 1 WHERE id = ?",
-      [id]
-    );
+    const { error } = await supabase
+      .from('monthly_rounds')
+      .update({ is_double_pata: 1 })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 }

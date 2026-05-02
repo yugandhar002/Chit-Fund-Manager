@@ -1,56 +1,112 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import { supabase } from '../supabase';
 import { Auction } from '../types';
 
 export class AuctionRepository {
-  constructor(private db: SQLiteDatabase) {}
-
   async recordAuction(data: Omit<Auction, 'id' | 'created_at'>): Promise<number> {
-    const result = await this.db.runAsync(
-      `INSERT INTO auctions (round_id, winner_member_id, commission_amount, payout_amount, dividend_per_member, effective_contribution, auction_number) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [data.round_id, data.winner_member_id, data.commission_amount, data.payout_amount, data.dividend_per_member, data.effective_contribution, data.auction_number]
-    );
-    return result.lastInsertRowId;
+    const { data: result, error } = await supabase
+      .from('auctions')
+      .insert([data])
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return result.id;
   }
 
   async getAuctionsByRound(roundId: number): Promise<Auction[]> {
-    return await this.db.getAllAsync<Auction>(
-      "SELECT * FROM auctions WHERE round_id = ?",
-      [roundId]
-    );
+    const { data, error } = await supabase
+      .from('auctions')
+      .select('*')
+      .eq('round_id', roundId);
+
+    if (error) throw error;
+    return data || [];
   }
 
   async getAuctionHistory(chitId: number): Promise<(Auction & { winner_name: string, month_number: number })[]> {
-    return await this.db.getAllAsync<Auction & { winner_name: string, month_number: number }>(
-      `SELECT a.*, m.name as winner_name, r.month_number 
-       FROM auctions a
-       JOIN monthly_rounds r ON a.round_id = r.id
-       JOIN members m ON a.winner_member_id = m.id
-       WHERE r.chit_id = ?
-       ORDER BY r.month_number ASC, a.auction_number ASC`,
-      [chitId]
-    );
+    // Get all rounds for this chit
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id, month_number')
+      .eq('chit_id', chitId);
+
+    if (roundsError) throw roundsError;
+    if (!rounds || rounds.length === 0) return [];
+
+    const roundIds = rounds.map(r => r.id);
+    const roundMap = new Map(rounds.map(r => [r.id, r.month_number]));
+
+    // Get auctions for these rounds, joined with members for winner name
+    const { data: auctions, error: auctionsError } = await supabase
+      .from('auctions')
+      .select('*, members!winner_member_id(name)')
+      .in('round_id', roundIds)
+      .order('auction_number', { ascending: true });
+
+    if (auctionsError) throw auctionsError;
+
+    if (!auctions) return [];
+
+    const history = auctions.map((a: any) => ({
+      ...a,
+      winner_name: a.members?.name || 'Unknown',
+      month_number: roundMap.get(a.round_id) || 0
+    }));
+
+    // Sort by month_number then auction_number
+    return history.sort((a, b) => {
+      if (a.month_number === b.month_number) {
+        return a.auction_number - b.auction_number;
+      }
+      return a.month_number - b.month_number;
+    });
   }
 
   async getCumulativeCommission(chitId: number): Promise<number> {
-    const result = await this.db.getFirstAsync<{ total: number }>(
-      `SELECT SUM(commission_amount) as total 
-       FROM auctions a
-       JOIN monthly_rounds r ON a.round_id = r.id
-       WHERE r.chit_id = ?`,
-      [chitId]
-    );
-    return result?.total || 0;
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+
+    if (roundsError) throw roundsError;
+    if (!rounds || rounds.length === 0) return 0;
+
+    const roundIds = rounds.map(r => r.id);
+    
+    const { data: auctions, error: auctionsError } = await supabase
+      .from('auctions')
+      .select('commission_amount')
+      .in('round_id', roundIds);
+
+    if (auctionsError) throw auctionsError;
+    
+    if (!auctions) return 0;
+    
+    return auctions.reduce((sum, a) => sum + (a.commission_amount || 0), 0);
   }
 
   async getWinners(chitId: number): Promise<number[]> {
-    const results = await this.db.getAllAsync<{ winner_member_id: number }>(
-      `SELECT DISTINCT winner_member_id 
-       FROM auctions a
-       JOIN monthly_rounds r ON a.round_id = r.id
-       WHERE r.chit_id = ?`,
-      [chitId]
-    );
-    return results.map(r => r.winner_member_id);
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+
+    if (roundsError) throw roundsError;
+    if (!rounds || rounds.length === 0) return [];
+
+    const roundIds = rounds.map(r => r.id);
+
+    const { data: auctions, error: auctionsError } = await supabase
+      .from('auctions')
+      .select('winner_member_id')
+      .in('round_id', roundIds);
+
+    if (auctionsError) throw auctionsError;
+
+    if (!auctions) return [];
+    
+    const winners = new Set<number>();
+    auctions.forEach(a => winners.add(a.winner_member_id));
+    return Array.from(winners);
   }
 }

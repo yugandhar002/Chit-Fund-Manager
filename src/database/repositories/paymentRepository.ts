@@ -1,162 +1,247 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import { supabase } from '../supabase';
 import { Payment } from '../types';
 
 export class PaymentRepository {
-  constructor(private db: SQLiteDatabase) {}
-
   async createPaymentEntries(roundId: number, memberIds: number[], expectedAmount: number): Promise<void> {
-    const placeholders = memberIds.map(() => '(?, ?, ?, ?)').join(', ');
-    const values = memberIds.flatMap(memberId => [roundId, memberId, expectedAmount, 'pending']);
-    
-    await this.db.runAsync(
-      `INSERT INTO payments (round_id, member_id, expected_amount, status) VALUES ${placeholders}`,
-      values
-    );
+    const entries = memberIds.map(memberId => ({
+      round_id: roundId,
+      member_id: memberId,
+      expected_amount: expectedAmount,
+      status: 'pending'
+    }));
+
+    const { error } = await supabase.from('payments').insert(entries);
+    if (error) throw error;
   }
 
   async updatePayment(id: number, data: { paid_amount: number, status: Payment['status'], notes?: string, payment_date?: string }): Promise<void> {
-    await this.db.runAsync(
-      `UPDATE payments SET 
-       paid_amount = ?, 
-       status = ?, 
-       notes = COALESCE(?, notes), 
-       payment_date = COALESCE(?, payment_date),
-       updated_at = datetime('now')
-       WHERE id = ?`,
-      [data.paid_amount, data.status, data.notes || null, data.payment_date || null, id]
-    );
+    const updateData: any = {
+      paid_amount: data.paid_amount,
+      status: data.status,
+      updated_at: new Date().toISOString()
+    };
+    if (data.notes) updateData.notes = data.notes;
+    if (data.payment_date) updateData.payment_date = data.payment_date;
+
+    const { error } = await supabase.from('payments').update(updateData).eq('id', id);
+    if (error) throw error;
   }
 
   async getPaymentsByRound(roundId: number): Promise<(Payment & { member_name: string })[]> {
-    return await this.db.getAllAsync<Payment & { member_name: string }>(
-      `SELECT p.*, m.name as member_name 
-       FROM payments p
-       JOIN members m ON p.member_id = m.id
-       WHERE p.round_id = ?
-       ORDER BY m.name ASC`,
-      [roundId]
-    );
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*, members!member_id(name)')
+      .eq('round_id', roundId);
+
+    if (error) throw error;
+    
+    // Process and sort locally to match old behavior
+    const result = (data || []).map((p: any) => ({
+      ...p,
+      member_name: p.members?.name || 'Unknown'
+    }));
+    return result.sort((a, b) => a.member_name.localeCompare(b.member_name));
   }
 
   async getPaymentsByMember(memberId: number): Promise<(Payment & { month_number: number })[]> {
-    return await this.db.getAllAsync<Payment & { month_number: number }>(
-      `SELECT p.*, r.month_number 
-       FROM payments p
-       JOIN monthly_rounds r ON p.round_id = r.id
-       WHERE p.member_id = ?
-       ORDER BY r.month_number ASC`,
-      [memberId]
-    );
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*, monthly_rounds!round_id(month_number)')
+      .eq('member_id', memberId);
+
+    if (error) throw error;
+
+    const result = (data || []).map((p: any) => ({
+      ...p,
+      month_number: p.monthly_rounds?.month_number || 0
+    }));
+    return result.sort((a, b) => a.month_number - b.month_number);
   }
 
   async getPaymentSummary(roundId: number): Promise<{ total_expected: number, total_paid: number, paid_count: number, partial_count: number, pending_count: number }> {
-    const result = await this.db.getFirstAsync<{
-      total_expected: number,
-      total_paid: number,
-      paid_count: number,
-      partial_count: number,
-      pending_count: number
-    }>(
-      `SELECT 
-        SUM(expected_amount) as total_expected,
-        SUM(paid_amount) as total_paid,
-        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
-        COUNT(CASE WHEN status = 'partial' THEN 1 END) as partial_count,
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count
-       FROM payments WHERE round_id = ?`,
-      [roundId]
-    );
-    return result || { total_expected: 0, total_paid: 0, paid_count: 0, partial_count: 0, pending_count: 0 };
+    const { data, error } = await supabase
+      .from('payments')
+      .select('expected_amount, paid_amount, status')
+      .eq('round_id', roundId);
+
+    if (error) throw error;
+
+    const summary = { total_expected: 0, total_paid: 0, paid_count: 0, partial_count: 0, pending_count: 0 };
+    if (!data) return summary;
+
+    data.forEach(p => {
+      summary.total_expected += p.expected_amount || 0;
+      summary.total_paid += p.paid_amount || 0;
+      if (p.status === 'paid' || p.status === 'refunded' || p.status === 'overpaid') summary.paid_count++;
+      else if (p.status === 'partial') summary.partial_count++;
+      else if (p.status === 'pending') summary.pending_count++;
+    });
+
+    return summary;
   }
+
   async getPaymentById(id: number): Promise<Payment | null> {
-    return await this.db.getFirstAsync<Payment>(
-      "SELECT * FROM payments WHERE id = ?",
-      [id]
-    );
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
   }
 
   async updateExpectedAmountsForRound(roundId: number, newExpectedAmount: number): Promise<void> {
-    await this.db.runAsync(
-      "UPDATE payments SET expected_amount = ?, updated_at = datetime('now') WHERE round_id = ?",
-      [newExpectedAmount, roundId]
-    );
+    const { error } = await supabase
+      .from('payments')
+      .update({ 
+        expected_amount: newExpectedAmount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('round_id', roundId);
+
+    if (error) throw error;
   }
 
   async getOverallFinancials(chitId: number): Promise<{ total_expected: number, total_paid: number }> {
-    const result = await this.db.getFirstAsync<{ total_expected: number, total_paid: number }>(
-      `SELECT SUM(p.expected_amount) as total_expected, SUM(p.paid_amount) as total_paid
-       FROM payments p
-       JOIN monthly_rounds r ON p.round_id = r.id
-       WHERE r.chit_id = ?`,
-      [chitId]
-    );
-    return result || { total_expected: 0, total_paid: 0 };
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+
+    if (roundsError) throw roundsError;
+    if (!rounds || rounds.length === 0) return { total_expected: 0, total_paid: 0 };
+
+    const roundIds = rounds.map(r => r.id);
+    const { data, error } = await supabase
+      .from('payments')
+      .select('expected_amount, paid_amount')
+      .in('round_id', roundIds);
+
+    if (error) throw error;
+
+    let total_expected = 0, total_paid = 0;
+    data?.forEach(p => {
+      total_expected += p.expected_amount || 0;
+      total_paid += p.paid_amount || 0;
+    });
+
+    return { total_expected, total_paid };
   }
 
   async getOutstandingDuesByMember(chitId: number): Promise<{ member_id: number, member_name: string, total_due: number }[]> {
-    return await this.db.getAllAsync<{ member_id: number, member_name: string, total_due: number }>(
-      `SELECT m.id as member_id, m.name as member_name, SUM(p.expected_amount - p.paid_amount) as total_due
-       FROM payments p
-       JOIN members m ON p.member_id = m.id
-       JOIN monthly_rounds r ON p.round_id = r.id
-       WHERE r.chit_id = ?
-       GROUP BY m.id
-       HAVING total_due > 0
-       ORDER BY total_due DESC`,
-      [chitId]
-    );
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+
+    if (roundsError) throw roundsError;
+    if (!rounds || rounds.length === 0) return [];
+
+    const roundIds = rounds.map(r => r.id);
+    const { data, error } = await supabase
+      .from('payments')
+      .select('member_id, expected_amount, paid_amount, members!member_id(name)')
+      .in('round_id', roundIds);
+
+    if (error) throw error;
+
+    const duesMap = new Map<number, { member_id: number, member_name: string, total_due: number }>();
+    
+    data?.forEach((p: any) => {
+      const due = (p.expected_amount || 0) - (p.paid_amount || 0);
+      if (due > 0) {
+        if (!duesMap.has(p.member_id)) {
+          duesMap.set(p.member_id, {
+            member_id: p.member_id,
+            member_name: p.members?.name || 'Unknown',
+            total_due: 0
+          });
+        }
+        duesMap.get(p.member_id)!.total_due += due;
+      }
+    });
+
+    const result = Array.from(duesMap.values());
+    return result.sort((a, b) => b.total_due - a.total_due);
   }
 
   async addTransaction(paymentId: number, amount: number, notes?: string): Promise<void> {
-    await this.db.runAsync(
-      'INSERT INTO payment_transactions (payment_id, amount, notes) VALUES (?, ?, ?)',
-      [paymentId, amount, notes || null]
-    );
+    const { error } = await supabase
+      .from('payment_transactions')
+      .insert([{ payment_id: paymentId, amount, notes }]);
+    
+    if (error) throw error;
   }
 
   async getTransactionsByPayment(paymentId: number): Promise<any[]> {
-    return await this.db.getAllAsync<any>(
-      'SELECT * FROM payment_transactions WHERE payment_id = ? ORDER BY payment_date DESC',
-      [paymentId]
-    );
+    const { data, error } = await supabase
+      .from('payment_transactions')
+      .select('*')
+      .eq('payment_id', paymentId)
+      .order('payment_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   }
 
-  /**
-   * Get members who overpaid for a round (paid_amount > expected_amount after auction recalc).
-   */
   async getOverpaidMembers(roundId: number): Promise<{ payment_id: number, member_id: number, member_name: string, paid_amount: number, expected_amount: number, refund_amount: number, status: string }[]> {
-    return await this.db.getAllAsync<{ payment_id: number, member_id: number, member_name: string, paid_amount: number, expected_amount: number, refund_amount: number, status: string }>(
-      `SELECT p.id as payment_id, p.member_id, m.name as member_name, 
-              p.paid_amount, p.expected_amount,
-              (p.paid_amount - p.expected_amount) as refund_amount,
-              p.status
-       FROM payments p
-       JOIN members m ON p.member_id = m.id
-       WHERE p.round_id = ? AND p.paid_amount > p.expected_amount
-       ORDER BY (p.paid_amount - p.expected_amount) DESC`,
-      [roundId]
-    );
+    const { data, error } = await supabase
+      .from('payments')
+      .select('id, member_id, paid_amount, expected_amount, status, members!member_id(name)')
+      .eq('round_id', roundId);
+
+    if (error) throw error;
+
+    const overpaid = (data || [])
+      .filter(p => (p.paid_amount || 0) > (p.expected_amount || 0))
+      .map((p: any) => ({
+        payment_id: p.id,
+        member_id: p.member_id,
+        member_name: p.members?.name || 'Unknown',
+        paid_amount: p.paid_amount || 0,
+        expected_amount: p.expected_amount || 0,
+        refund_amount: (p.paid_amount || 0) - (p.expected_amount || 0),
+        status: p.status
+      }));
+
+    return overpaid.sort((a, b) => b.refund_amount - a.refund_amount);
   }
 
-  /**
-   * Mark an overpaid payment as refunded.
-   */
   async markAsRefunded(paymentId: number): Promise<void> {
-    await this.db.runAsync(
-      "UPDATE payments SET status = 'refunded', updated_at = datetime('now') WHERE id = ?",
-      [paymentId]
-    );
+    const { error } = await supabase
+      .from('payments')
+      .update({ 
+        status: 'refunded',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', paymentId);
+
+    if (error) throw error;
   }
 
-  /**
-   * Update status of all overpaid members in a round to 'overpaid'.
-   */
   async markOverpaidMembers(roundId: number): Promise<void> {
-    await this.db.runAsync(
-      `UPDATE payments SET status = 'overpaid', updated_at = datetime('now') 
-       WHERE round_id = ? AND paid_amount > expected_amount AND status != 'refunded'`,
-      [roundId]
+    // Supabase update based on condition is tricky from JS client without RPC.
+    // We will fetch overpaid payments, then update them.
+    const { data, error } = await supabase
+      .from('payments')
+      .select('id, paid_amount, expected_amount, status')
+      .eq('round_id', roundId);
+
+    if (error) throw error;
+
+    const toUpdate = (data || []).filter(p => 
+      (p.paid_amount || 0) > (p.expected_amount || 0) && p.status !== 'refunded'
     );
+
+    for (const payment of toUpdate) {
+      await supabase
+        .from('payments')
+        .update({ 
+          status: 'overpaid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', payment.id);
+    }
   }
 }
-

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
-import { getDatabase, AuctionRepository, MemberRepository, RoundRepository, ChitRepository, Member, Chit, MonthlyRound } from '../src/database';
+import { AuctionRepository, MemberRepository, RoundRepository, ChitRepository, Member, Chit, MonthlyRound } from '../src/database';
 import { ChitService } from '../src/services/chitService';
 
 export default function RecordAuctionScreen() {
@@ -27,10 +27,9 @@ export default function RecordAuctionScreen() {
     async function loadInitialData() {
       if (!roundId) return;
       try {
-        const db = await getDatabase();
-        const roundRepo = new RoundRepository(db);
-        const chitRepo = new ChitRepository(db);
-        const memberRepo = new MemberRepository(db);
+        const roundRepo = new RoundRepository();
+        const chitRepo = new ChitRepository();
+        const memberRepo = new MemberRepository();
         
         const chit = await chitRepo.getActiveChit();
         if (chit) {
@@ -73,8 +72,7 @@ export default function RecordAuctionScreen() {
 
     setSaving(true);
     try {
-      const db = await getDatabase();
-      const service = new ChitService(db);
+      const service = new ChitService();
       
       // Use the new method that records auction AND recalculates same-month payments
       const result = await service.recordAuctionAndRecalculate(activeChit!.id, {

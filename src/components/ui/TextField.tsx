@@ -44,6 +44,7 @@ const styles = StyleSheet.create({
     padding: Theme.spacing.md,
     color: Colors.textPrimary,
     fontSize: 16,
+    width: '100%',
   },
   inputError: {
     borderColor: Colors.error,

@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { getDatabase } from '../src/database';
 import { Colors } from '../src/constants/colors';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { queryClient, asyncStoragePersister } from '../src/lib/queryClient';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -28,32 +29,18 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  const [dbInitialized, setDbInitialized] = useState(false);
-
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
     if (error) throw error;
   }, [error]);
 
   useEffect(() => {
-    async function initialize() {
-      try {
-        await getDatabase();
-        setDbInitialized(true);
-      } catch (e) {
-        console.error('Failed to initialize database', e);
-      }
-    }
-    initialize();
-  }, []);
-
-  useEffect(() => {
-    if (loaded && dbInitialized) {
+    if (loaded) {
       SplashScreen.hideAsync();
     }
-  }, [loaded, dbInitialized]);
+  }, [loaded]);
 
-  if (!loaded || !dbInitialized) {
+  if (!loaded) {
     return null;
   }
 
@@ -62,12 +49,17 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   return (
-    <ThemeProvider value={DarkTheme}>
-      <StatusBar style="light" backgroundColor={Colors.primary} />
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Info' }} />
-      </Stack>
-    </ThemeProvider>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister: asyncStoragePersister }}
+    >
+      <ThemeProvider value={DarkTheme}>
+        <StatusBar style="light" backgroundColor={Colors.primary} />
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="switch-batch" options={{ presentation: 'modal', title: 'Switch Batch' }} />
+        </Stack>
+      </ThemeProvider>
+    </PersistQueryClientProvider>
   );
 }

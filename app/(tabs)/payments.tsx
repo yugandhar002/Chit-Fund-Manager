@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Badge, StatCard } from '../../src/components/ui';
-import { getDatabase, PaymentRepository, RoundRepository, ChitRepository, AuctionRepository, Payment, MonthlyRound, Chit, Auction } from '../../src/database';
+import { PaymentRepository, RoundRepository, ChitRepository, AuctionRepository, Payment, MonthlyRound, Chit, Auction } from '../../src/database';
 
 export default function PaymentsScreen() {
   const router = useRouter();
@@ -27,10 +27,9 @@ export default function PaymentsScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
-      const roundRepo = new RoundRepository(db);
-      const paymentRepo = new PaymentRepository(db);
+      const chitRepo = new ChitRepository();
+      const roundRepo = new RoundRepository();
+      const paymentRepo = new PaymentRepository();
       
       const chit = await chitRepo.getActiveChit();
       if (chit) {
@@ -50,7 +49,7 @@ export default function PaymentsScreen() {
         }
       }
     } catch (e) {
-      console.error(e);
+      console.log('DB not setup or empty:', (e as any)?.message || e);
     } finally {
       setLoading(false);
     }
@@ -59,9 +58,8 @@ export default function PaymentsScreen() {
   const loadRoundData = useCallback(async () => {
     if (!selectedRoundId) return;
     try {
-      const db = await getDatabase();
-      const paymentRepo = new PaymentRepository(db);
-      const auctionRepo = new AuctionRepository(db);
+      const paymentRepo = new PaymentRepository();
+      const auctionRepo = new AuctionRepository();
       const [paymentList, paymentSummary, auctions] = await Promise.all([
         paymentRepo.getPaymentsByRound(selectedRoundId),
         paymentRepo.getPaymentSummary(selectedRoundId),
@@ -71,7 +69,7 @@ export default function PaymentsScreen() {
       setSummary(paymentSummary);
       setRoundAuctions(auctions);
     } catch (e) {
-      console.error(e);
+      console.log('DB not setup or empty:', (e as any)?.message || e);
     }
   }, [selectedRoundId]);
 

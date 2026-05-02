@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card, Badge } from '../src/components/ui';
-import { getDatabase, MemberRepository, PaymentRepository, Member, Payment } from '../src/database';
+import { MemberRepository, PaymentRepository, Member, Payment } from '../src/database';
 
 export default function MemberDetailScreen() {
   const router = useRouter();
@@ -27,9 +27,8 @@ export default function MemberDetailScreen() {
     async function loadMember() {
       if (!id) return;
       try {
-        const db = await getDatabase();
-        const memberRepo = new MemberRepository(db);
-        const paymentRepo = new PaymentRepository(db);
+        const memberRepo = new MemberRepository();
+        const paymentRepo = new PaymentRepository();
         
         const [memberData, historyData] = await Promise.all([
           memberRepo.getMemberById(parseInt(id)),
@@ -62,8 +61,7 @@ export default function MemberDetailScreen() {
 
     setSaving(true);
     try {
-      const db = await getDatabase();
-      const memberRepo = new MemberRepository(db);
+      const memberRepo = new MemberRepository();
       await memberRepo.updateMember(parseInt(id!), {
         name: name.trim(),
         phone: phone.trim(),
@@ -100,8 +98,7 @@ export default function MemberDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const db = await getDatabase();
-              const memberRepo = new MemberRepository(db);
+              const memberRepo = new MemberRepository();
               await memberRepo.deleteMember(parseInt(id!));
               router.back();
             } catch (e) {

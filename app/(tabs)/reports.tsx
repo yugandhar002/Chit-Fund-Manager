@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { Card, Badge, EmptyState } from '../../src/components/ui';
-import { getDatabase, AuctionRepository, PaymentRepository, MemberRepository, ChitRepository, Chit } from '../../src/database';
+import { AuctionRepository, PaymentRepository, MemberRepository, ChitRepository, Chit } from '../../src/database';
 
 export default function ReportsScreen() {
   const [loading, setLoading] = useState(true);
@@ -22,11 +22,10 @@ export default function ReportsScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
-      const auctionRepo = new AuctionRepository(db);
-      const paymentRepo = new PaymentRepository(db);
-      const memberRepo = new MemberRepository(db);
+      const chitRepo = new ChitRepository();
+      const auctionRepo = new AuctionRepository();
+      const paymentRepo = new PaymentRepository();
+      const memberRepo = new MemberRepository();
       
       const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
@@ -45,7 +44,7 @@ export default function ReportsScreen() {
         setMembers(allMembers);
       }
     } catch (e) {
-      console.error(e);
+      console.log('DB not setup or empty:', (e as any)?.message || e);
     } finally {
       setLoading(false);
     }

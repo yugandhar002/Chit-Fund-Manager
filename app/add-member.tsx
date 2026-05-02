@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
-import { getDatabase, MemberRepository, ChitRepository, Chit } from '../src/database';
+import { MemberRepository, ChitRepository, Chit } from '../src/database';
 
 export default function AddMemberScreen() {
   const router = useRouter();
@@ -20,8 +20,7 @@ export default function AddMemberScreen() {
   useEffect(() => {
     async function loadChit() {
       try {
-        const db = await getDatabase();
-        const chitRepo = new ChitRepository(db);
+        const chitRepo = new ChitRepository();
         const chit = await chitRepo.getActiveChit();
         setActiveChit(chit);
       } catch (e) {
@@ -44,8 +43,7 @@ export default function AddMemberScreen() {
 
     setLoading(true);
     try {
-      const db = await getDatabase();
-      const memberRepo = new MemberRepository(db);
+      const memberRepo = new MemberRepository();
       
       await memberRepo.addMember({
         chit_id: activeChit.id,

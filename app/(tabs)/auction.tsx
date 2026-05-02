@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge, StatCard } from '../../src/components/ui';
-import { getDatabase, RoundRepository, AuctionRepository, ChitRepository, PaymentRepository, MonthlyRound, Auction, Chit } from '../../src/database';
+import { RoundRepository, AuctionRepository, ChitRepository, PaymentRepository, MonthlyRound, Auction, Chit } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
 import { Alert } from 'react-native';
 
@@ -31,11 +31,10 @@ export default function AuctionScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
-      const roundRepo = new RoundRepository(db);
-      const auctionRepo = new AuctionRepository(db);
-      const service = new ChitService(db);
+      const chitRepo = new ChitRepository();
+      const roundRepo = new RoundRepository();
+      const auctionRepo = new AuctionRepository();
+      const service = new ChitService();
       
       const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
@@ -66,7 +65,7 @@ export default function AuctionScreen() {
         }
       }
     } catch (e) {
-      console.error(e);
+      console.log('DB not setup or empty:', (e as any)?.message || e);
     } finally {
       setLoading(false);
     }
@@ -82,8 +81,7 @@ export default function AuctionScreen() {
     if (!currentRound) return;
     setProcessing(true);
     try {
-      const db = await getDatabase();
-      const service = new ChitService(db);
+      const service = new ChitService();
       await service.concludeCurrentRound(currentRound.id);
       Alert.alert('Success', `Month ${currentRound.month_number} concluded.`);
       loadData();
@@ -98,8 +96,7 @@ export default function AuctionScreen() {
     if (!activeChit) return;
     setProcessing(true);
     try {
-      const db = await getDatabase();
-      const service = new ChitService(db);
+      const service = new ChitService();
       const nextRoundId = await service.startNextRound(activeChit.id);
       Alert.alert('Success', 'Next month started. Payment entries created at full amount.');
       loadData();
@@ -120,8 +117,7 @@ export default function AuctionScreen() {
           text: 'Yes, Refunded', 
           onPress: async () => {
             try {
-              const db = await getDatabase();
-              const service = new ChitService(db);
+              const service = new ChitService();
               await service.markMemberRefunded(paymentId);
               Alert.alert('Done', `${memberName} marked as refunded.`);
               loadData();

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge } from '../../src/components/ui';
-import { getDatabase, MemberRepository, ChitRepository, Member, Chit } from '../../src/database';
+import { MemberRepository, ChitRepository, Member, Chit } from '../../src/database';
 
 export default function MembersScreen() {
   const router = useRouter();
@@ -15,9 +15,8 @@ export default function MembersScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
-      const memberRepo = new MemberRepository(db);
+      const chitRepo = new ChitRepository();
+      const memberRepo = new MemberRepository();
       
       const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
@@ -27,7 +26,7 @@ export default function MembersScreen() {
         setMembers(memberList);
       }
     } catch (e) {
-      console.error(e);
+      console.log('DB not setup or empty:', (e as any)?.message || e);
     } finally {
       setLoading(false);
     }

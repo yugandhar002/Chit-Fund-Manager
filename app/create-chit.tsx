@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
-import { getDatabase, ChitRepository } from '../src/database';
+import { ChitRepository } from '../src/database';
 
 export default function CreateChitScreen() {
   const router = useRouter();
@@ -38,8 +38,7 @@ export default function CreateChitScreen() {
 
     setLoading(true);
     try {
-      const db = await getDatabase();
-      const chitRepo = new ChitRepository(db);
+      const chitRepo = new ChitRepository();
       
       await chitRepo.createChit({
         name: name.trim(),
@@ -80,30 +79,33 @@ export default function CreateChitScreen() {
         />
 
         <View style={styles.row}>
-          <TextField
-            label="Total Value (₹)"
-            keyboardType="numeric"
-            value={totalValue}
-            onChangeText={setTotalValue}
-            style={styles.halfInput}
-          />
-          <TextField
-            label="Duration (Months)"
-            keyboardType="numeric"
-            value={duration}
-            onChangeText={setDuration}
-            style={styles.halfInput}
-          />
+          <View style={styles.halfInput}>
+            <TextField
+              label="Total Value (₹)"
+              keyboardType="numeric"
+              value={totalValue}
+              onChangeText={setTotalValue}
+            />
+          </View>
+          <View style={styles.halfInput}>
+            <TextField
+              label="Duration (Months)"
+              keyboardType="numeric"
+              value={duration}
+              onChangeText={setDuration}
+            />
+          </View>
         </View>
 
         <View style={styles.row}>
-          <TextField
-            label="Member Count"
-            keyboardType="numeric"
-            value={memberCount}
-            onChangeText={setMemberCount}
-            style={styles.halfInput}
-          />
+          <View style={styles.halfInput}>
+            <TextField
+              label="Member Count"
+              keyboardType="numeric"
+              value={memberCount}
+              onChangeText={setMemberCount}
+            />
+          </View>
           <View style={styles.halfInput}>
             <Text style={styles.dateLabel}>Start Date</Text>
             <Button 

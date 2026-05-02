@@ -1,53 +1,96 @@
-import { SQLiteDatabase } from 'expo-sqlite';
+import { supabase } from '../supabase';
 import { Member } from '../types';
 
 export class MemberRepository {
-  constructor(private db: SQLiteDatabase) {}
-
   async addMember(data: Omit<Member, 'id' | 'created_at'>): Promise<number> {
-    const result = await this.db.runAsync(
-      `INSERT INTO members (chit_id, name, phone, address, is_organizer, status) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [data.chit_id, data.name, data.phone || null, data.address || null, data.is_organizer, data.status]
-    );
-    return result.lastInsertRowId;
+    const { data: result, error } = await supabase
+      .from('members')
+      .insert([data])
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return result.id;
   }
 
   async getMembersByChit(chitId: number): Promise<Member[]> {
-    return await this.db.getAllAsync<Member>(
-      "SELECT * FROM members WHERE chit_id = ? ORDER BY is_organizer DESC, name ASC",
-      [chitId]
-    );
+    const { data, error } = await supabase
+      .from('members')
+      .select('*')
+      .eq('chit_id', chitId)
+      .order('is_organizer', { ascending: false })
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
   }
 
   async getMemberById(id: number): Promise<Member | null> {
-    return await this.db.getFirstAsync<Member>(
-      "SELECT * FROM members WHERE id = ?",
-      [id]
-    );
+    const { data, error } = await supabase
+      .from('members')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
   }
 
   async updateMember(id: number, data: Partial<Omit<Member, 'id' | 'chit_id' | 'created_at'>>): Promise<void> {
-    const fields = Object.keys(data).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(data), id];
-    await this.db.runAsync(`UPDATE members SET ${fields} WHERE id = ?`, values);
+    const { error } = await supabase
+      .from('members')
+      .update(data)
+      .eq('id', id);
+
+    if (error) throw error;
   }
 
   async deleteMember(id: number): Promise<void> {
-    await this.db.runAsync("DELETE FROM members WHERE id = ?", [id]);
+    const { error } = await supabase
+      .from('members')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
   }
 
   async getAvailableBidders(chitId: number): Promise<Member[]> {
-    // Get members who haven't won an auction yet in this chit
-    return await this.db.getAllAsync<Member>(
-      `SELECT * FROM members 
-       WHERE chit_id = ? AND is_organizer = 0 AND id NOT IN (
-         SELECT winner_member_id FROM auctions 
-         JOIN monthly_rounds ON auctions.round_id = monthly_rounds.id 
-         WHERE monthly_rounds.chit_id = ?
-       )
-       ORDER BY name ASC`,
-      [chitId, chitId]
-    );
+    // 1. Get all winners for this chit
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+      
+    if (roundsError) throw roundsError;
+    
+    let winnerIds: number[] = [];
+    if (rounds && rounds.length > 0) {
+      const roundIds = rounds.map(r => r.id);
+      const { data: auctions, error: auctionsError } = await supabase
+        .from('auctions')
+        .select('winner_member_id')
+        .in('round_id', roundIds);
+        
+      if (auctionsError) throw auctionsError;
+      if (auctions) {
+        winnerIds = auctions.map(a => a.winner_member_id);
+      }
+    }
+
+    // 2. Get non-winners
+    let query = supabase
+      .from('members')
+      .select('*')
+      .eq('chit_id', chitId)
+      .eq('is_organizer', 0);
+      
+    if (winnerIds.length > 0) {
+      query = query.not('id', 'in', `(${winnerIds.join(',')})`);
+    }
+
+    const { data, error } = await query.order('name', { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
   }
 }
