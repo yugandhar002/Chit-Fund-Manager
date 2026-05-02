@@ -6,12 +6,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
+import { useAuth } from '../../src/context/AuthContext';
 import { StatCard, EmptyState, Button, Card } from '../../src/components/ui';
 import { ChitRepository, MemberRepository, RoundRepository, Chit } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const queryClient = useQueryClient();
   const [starting, setStarting] = useState(false);
 
@@ -118,6 +120,12 @@ export default function DashboardScreen() {
       <View style={styles.headerRow}>
         <Text style={styles.headerTitle}>{activeChit.name}</Text>
         <View style={{flexDirection: 'row', gap: 10, alignItems: 'center'}}>
+          <TouchableOpacity 
+            style={styles.switchButton}
+            onPress={signOut}
+          >
+            <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+          </TouchableOpacity>
           <TouchableOpacity 
             style={styles.switchButton}
             onPress={() => router.push('/switch-batch')}
