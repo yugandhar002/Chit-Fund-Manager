@@ -58,7 +58,8 @@ export default function RecordAuctionScreen() {
   const memberCount = activeChit?.member_count || 20;
   const commissionPaisa = (parseInt(commission) || 0) * 100;
   const payoutPaisa = totalValue - commissionPaisa;
-  const dividendPaisa = commissionPaisa / memberCount;
+  const dividendPaisa = Math.floor(commissionPaisa / memberCount);
+  const effectiveContribution = (activeChit?.monthly_contribution || 0) - dividendPaisa;
 
   const handleRecord = async () => {
     if (!selectedWinner) {
@@ -75,17 +76,23 @@ export default function RecordAuctionScreen() {
       const db = await getDatabase();
       const service = new ChitService(db);
       
-      await service.recordAuctionResult(activeChit!.id, {
+      // Use the new method that records auction AND recalculates same-month payments
+      const result = await service.recordAuctionAndRecalculate(activeChit!.id, {
         round_id: parseInt(roundId!),
         winner_member_id: selectedWinner.id,
         commission_amount: commissionPaisa,
         payout_amount: payoutPaisa,
         dividend_per_member: dividendPaisa,
-        effective_contribution: (activeChit?.monthly_contribution || 0) - dividendPaisa,
+        effective_contribution: effectiveContribution,
         auction_number: parseInt(auctionNumber || '1'),
       });
 
-      Alert.alert('Success', 'Auction result recorded successfully', [
+      const overpaidCount = result.overpaidMembers.length;
+      const message = overpaidCount > 0 
+        ? `Auction recorded! ${overpaidCount} member(s) have overpaid and need refunds. Check the Auction tab for details.`
+        : 'Auction recorded and payment amounts updated for this month.';
+
+      Alert.alert('Success', message, [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (e) {
@@ -133,9 +140,17 @@ export default function RecordAuctionScreen() {
           </View>
           <View style={styles.separator} />
           <View style={styles.calcRow}>
-            <Text style={styles.calcLabel}>Next Payment per Member:</Text>
-            <Text style={styles.nextPayText}>₹{(( (activeChit?.monthly_contribution || 0) - dividendPaisa) / 100).toLocaleString()}</Text>
+            <Text style={styles.calcLabel}>This Month's Payment per Member:</Text>
+            <Text style={styles.nextPayText}>₹{(effectiveContribution / 100).toLocaleString()}</Text>
           </View>
+        </View>
+
+        {/* Info about what happens after recording */}
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
+          <Text style={styles.infoText}>
+            Recording the auction will update all payment amounts for this month from ₹{((activeChit?.monthly_contribution || 0) / 100).toLocaleString()} to ₹{(effectiveContribution / 100).toLocaleString()}. Members who already paid more will be highlighted for refund.
+          </Text>
         </View>
 
         <Button
@@ -238,7 +253,7 @@ const styles = StyleSheet.create({
     padding: Theme.spacing.lg,
     borderRadius: Theme.borderRadius.md,
     marginTop: Theme.spacing.lg,
-    marginBottom: Theme.spacing.xl,
+    marginBottom: Theme.spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -251,6 +266,7 @@ const styles = StyleSheet.create({
   calcLabel: {
     color: Colors.textSecondary,
     fontSize: 14,
+    flex: 1,
   },
   payoutText: {
     color: Colors.secondary,
@@ -271,6 +287,23 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.border,
     marginVertical: Theme.spacing.md,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: Colors.info + '15',
+    borderColor: Colors.info + '40',
+    borderWidth: 1,
+    borderRadius: Theme.borderRadius.sm,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.lg,
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  infoText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
   },
   submitButton: {
     marginTop: Theme.spacing.md,

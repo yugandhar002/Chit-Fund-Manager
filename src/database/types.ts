@@ -51,7 +51,7 @@ export interface Payment {
   expected_amount: number;
   paid_amount: number;
   payment_date?: string;
-  status: 'pending' | 'partial' | 'paid' | 'late';
+  status: 'pending' | 'partial' | 'paid' | 'late' | 'overpaid' | 'refunded';
   notes?: string;
   created_at: string;
   updated_at: string;

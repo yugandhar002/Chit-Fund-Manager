@@ -120,4 +120,43 @@ export class PaymentRepository {
       [paymentId]
     );
   }
+
+  /**
+   * Get members who overpaid for a round (paid_amount > expected_amount after auction recalc).
+   */
+  async getOverpaidMembers(roundId: number): Promise<{ payment_id: number, member_id: number, member_name: string, paid_amount: number, expected_amount: number, refund_amount: number, status: string }[]> {
+    return await this.db.getAllAsync<{ payment_id: number, member_id: number, member_name: string, paid_amount: number, expected_amount: number, refund_amount: number, status: string }>(
+      `SELECT p.id as payment_id, p.member_id, m.name as member_name, 
+              p.paid_amount, p.expected_amount,
+              (p.paid_amount - p.expected_amount) as refund_amount,
+              p.status
+       FROM payments p
+       JOIN members m ON p.member_id = m.id
+       WHERE p.round_id = ? AND p.paid_amount > p.expected_amount
+       ORDER BY (p.paid_amount - p.expected_amount) DESC`,
+      [roundId]
+    );
+  }
+
+  /**
+   * Mark an overpaid payment as refunded.
+   */
+  async markAsRefunded(paymentId: number): Promise<void> {
+    await this.db.runAsync(
+      "UPDATE payments SET status = 'refunded', updated_at = datetime('now') WHERE id = ?",
+      [paymentId]
+    );
+  }
+
+  /**
+   * Update status of all overpaid members in a round to 'overpaid'.
+   */
+  async markOverpaidMembers(roundId: number): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE payments SET status = 'overpaid', updated_at = datetime('now') 
+       WHERE round_id = ? AND paid_amount > expected_amount AND status != 'refunded'`,
+      [roundId]
+    );
+  }
 }
+

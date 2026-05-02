@@ -16,6 +16,8 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [financials, setFinancials] = useState({
+    totalCommission: 0,
+    totalCollected: 0,
     totalExpected: 0,
     totalOutstanding: 0,
     winnerCount: 0
@@ -61,7 +63,7 @@ export default function DashboardScreen() {
       const db = await getDatabase();
       const service = new ChitService(db);
       await service.startChitFund(activeChit.id);
-      Alert.alert('Success', 'Chit Fund started! Month 1 details recorded for the organizer.');
+      Alert.alert('Success', 'Month 1 started! Payment entries created for all members. Collect payments and then conclude when done.');
       loadData();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to start chit fund');

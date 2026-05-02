@@ -60,18 +60,38 @@ export default function RecordPaymentScreen() {
     if (!payment) return;
     const paidAmountPaisa = Math.round(parseFloat(amount) * 100);
     
-    if (isNaN(paidAmountPaisa) || paidAmountPaisa < 0) {
+    if (isNaN(paidAmountPaisa) || paidAmountPaisa === 0) {
       Alert.alert('Error', 'Please enter a valid amount');
       return;
     }
 
+    // For negative amounts (refunds), confirm with user
+    if (paidAmountPaisa < 0) {
+      const refundAmt = Math.abs(paidAmountPaisa);
+      Alert.alert(
+        'Confirm Refund',
+        `Refund ₹${(refundAmt / 100).toLocaleString()} to ${member?.name}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Yes, Refund', onPress: () => processTransaction(paidAmountPaisa) }
+        ]
+      );
+      return;
+    }
+
+    await processTransaction(paidAmountPaisa);
+  };
+
+  const processTransaction = async (paidAmountPaisa: number) => {
+    if (!payment) return;
     setSaving(true);
     try {
       const db = await getDatabase();
       const service = new ChitService(db);
       await service.addPaymentTransaction(payment.id, paidAmountPaisa, notes);
       
-      Alert.alert('Success', 'Payment recorded successfully', [
+      const msg = paidAmountPaisa < 0 ? 'Refund recorded successfully' : 'Payment recorded successfully';
+      Alert.alert('Success', msg, [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (e: any) {
@@ -85,6 +105,7 @@ export default function RecordPaymentScreen() {
   if (!payment || !member || !round) return <View style={styles.container} />;
 
   const remaining = payment.expected_amount - payment.paid_amount;
+  const isOverpaid = remaining < 0;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -92,7 +113,7 @@ export default function RecordPaymentScreen() {
         <Text style={styles.infoLabel}>Month {round.month_number} Payment</Text>
         <Text style={styles.memberName}>{member.name}</Text>
         
-        <View style={styles.infoRow}>
+        <View style={[styles.infoRow, isOverpaid ? { borderColor: '#F59E0B', borderWidth: 1 } : null]}>
           <View>
             <Text style={styles.label}>Expected</Text>
             <Text style={styles.expectedValue}>₹{(payment.expected_amount / 100).toLocaleString()}</Text>
@@ -102,26 +123,45 @@ export default function RecordPaymentScreen() {
             <Text style={[styles.expectedValue, { color: Colors.success }]}>₹{(payment.paid_amount / 100).toLocaleString()}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.label}>Remaining</Text>
-            <Text style={[styles.expectedValue, { color: Colors.error }]}>₹{(remaining / 100).toLocaleString()}</Text>
+            <Text style={styles.label}>{isOverpaid ? 'Overpaid' : 'Remaining'}</Text>
+            <Text style={[styles.expectedValue, { color: isOverpaid ? '#F59E0B' : Colors.error }]}>
+              {isOverpaid ? `₹${(Math.abs(remaining) / 100).toLocaleString()}` : `₹${(remaining / 100).toLocaleString()}`}
+            </Text>
           </View>
         </View>
 
+        {isOverpaid && (
+          <View style={styles.overpaidBanner}>
+            <Text style={styles.overpaidBannerText}>
+              ⚠️ This member overpaid by ₹{(Math.abs(remaining) / 100).toLocaleString()}. Use "Refund Overpaid" to record the refund.
+            </Text>
+          </View>
+        )}
+
         <TextField
-          label="New Payment Amount (₹)"
-          placeholder="Enter amount to add..."
+          label={isOverpaid ? "Refund Amount (₹) — enter negative e.g. -3500" : "New Payment Amount (₹)"}
+          placeholder={isOverpaid ? "e.g. -3500" : "Enter amount to add..."}
           value={amount}
           onChangeText={setAmount}
           keyboardType="numeric"
         />
 
         <View style={styles.quickActions}>
-          <TouchableOpacity 
-            style={styles.quickButton} 
-            onPress={() => setAmount((remaining / 100).toString())}
-          >
-            <Text style={styles.quickButtonText}>Pay Remaining</Text>
-          </TouchableOpacity>
+          {isOverpaid ? (
+            <TouchableOpacity 
+              style={[styles.quickButton, { backgroundColor: '#F59E0B' }]} 
+              onPress={() => setAmount((remaining / 100).toString())}
+            >
+              <Text style={styles.quickButtonText}>Refund ₹{(Math.abs(remaining) / 100).toLocaleString()}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={styles.quickButton} 
+              onPress={() => setAmount((remaining / 100).toString())}
+            >
+              <Text style={styles.quickButtonText}>Pay Remaining</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <TextField
@@ -251,5 +291,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  overpaidBanner: {
+    backgroundColor: '#F59E0B15',
+    borderColor: '#F59E0B40',
+    borderWidth: 1,
+    borderRadius: Theme.borderRadius.sm,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.lg,
+  },
+  overpaidBannerText: {
+    color: '#F59E0B',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
   },
 });
