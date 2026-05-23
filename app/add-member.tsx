@@ -5,6 +5,7 @@ import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
 import { Button, TextField, Card } from '../src/components/ui';
 import { MemberRepository, ChitRepository, Chit } from '../src/database';
+import { ChitService } from '../src/services/chitService';
 
 export default function AddMemberScreen() {
   const router = useRouter();
@@ -51,6 +52,11 @@ export default function AddMemberScreen() {
         is_organizer: isOrganizer ? 1 : 0,
         status: 'active',
       });
+
+      // Heal missing payments for the newly added member across existing rounds
+      const chitService = new ChitService();
+      await chitService.healMissingPayments(activeChit.id);
+
       router.back();
     } catch (e) {
       console.error('Failed to add member:', e);

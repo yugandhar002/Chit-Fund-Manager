@@ -1,23 +1,41 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useState, useCallback, useLayoutEffect } from 'react';
+import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
-import { StatCard, EmptyState, Button, Card } from '../../src/components/ui';
+import { StatCard, EmptyState, Button, Card, Badge } from '../../src/components/ui';
 import { ChitRepository, MemberRepository, RoundRepository, Chit } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
+import { LocalDatabase } from '../../src/database/localDb';
+import { SyncEngine } from '../../src/services/syncEngine';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [starting, setStarting] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const navigation = useNavigation();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity 
+          style={{ marginRight: 16, padding: 8 }}
+          onPress={() => setShowInfoModal(true)}
+        >
+          <Ionicons name="information-circle-outline" size={24} color={Colors.secondary} />
+        </TouchableOpacity>
+      )
+    });
+  }, [navigation]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => {
+      await LocalDatabase.init();
       const chitRepo = new ChitRepository();
       const memberRepo = new MemberRepository();
       const service = new ChitService();
@@ -57,7 +75,16 @@ export default function DashboardScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Fetch instantly from the super-fast local cache
       refetch();
+
+      // Trigger bi-directional sync silently in the background
+      SyncEngine.syncAll()
+        .then(() => {
+          // Re-populate state with freshly synced cloud details
+          refetch();
+        })
+        .catch(err => console.error('Dashboard Sync error:', err));
     }, [refetch])
   );
 
@@ -225,6 +252,91 @@ export default function DashboardScreen() {
           </View>
         )}
       </View>
+
+      {/* Premium Commercial License & Info Modal */}
+      <Modal
+        visible={showInfoModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowInfoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <Ionicons name="shield-checkmark-outline" size={24} color={Colors.secondary} />
+                <Text style={styles.modalMainTitle}>Chit Fund Manager</Text>
+              </View>
+              <Badge label="COMMERCIAL" variant="success" />
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+              
+              {/* Product Info */}
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSecTitle}>Product Summary</Text>
+                <Text style={styles.modalText}>
+                  A premium, high-density secure ledger application designed specifically for commercial chit fund management, dividend payouts, and member payment reconciliation.
+                </Text>
+              </View>
+
+              {/* Proprietary Rights & Legal Notice */}
+              <View style={styles.modalSection}>
+                <Text style={[styles.modalSecTitle, { color: '#F59E0B' }]}>Proprietary & Legal Notice</Text>
+                <Text style={styles.modalText}>
+                  This application, including all source code, database structures, workflows, and visual designs, is the exclusive intellectual property of <Text style={styles.highlightText}>Yugandhar</Text>.
+                </Text>
+                <Text style={styles.modalSubtext}>
+                  All rights reserved. Unauthorized copying, distribution, decompilation, or reverse engineering of this software is strictly prohibited and subject to legal prosecution.
+                </Text>
+              </View>
+
+              {/* License Credentials */}
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSecTitle}>License Details</Text>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailKey}>Owner & Licensee</Text>
+                  <Text style={styles.detailVal}>Yugandhar</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailKey}>License ID</Text>
+                  <Text style={styles.detailVal}>CFM-COMM-2026-001</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailKey}>Environment</Text>
+                  <Text style={styles.detailVal}>Secure Commercial Production</Text>
+                </View>
+              </View>
+
+              {/* Contact Support */}
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSecTitle}>Support & Contact</Text>
+                <TouchableOpacity 
+                  style={styles.contactLink}
+                  onPress={() => Alert.alert('Email Support', 'Contact: yoyugandher@gmail.com')}
+                >
+                  <Ionicons name="mail-outline" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.contactLinkText}>yoyugandher@gmail.com</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.contactLink}
+                  onPress={() => Alert.alert('Phone Support', 'Contact: +91 7205938316')}
+                >
+                  <Ionicons name="call-outline" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.contactLinkText}>+91 7205938316</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            <Button 
+              title="Close Panel" 
+              onPress={() => setShowInfoModal(false)}
+              variant="secondary"
+              style={styles.modalCloseBtn}
+            />
+          </Card>
+        </View>
+      </Modal>
 
     </ScrollView>
   );
@@ -416,5 +528,109 @@ const styles = StyleSheet.create({
   noticeMessage: {
     color: Colors.textSecondary,
     fontSize: 12,
+  },
+  infoIconButton: {
+    padding: 8,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: Colors.primary, // Completely solid opaque background to block background details
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Theme.spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: Colors.surface,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingBottom: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalMainTitle: {
+    color: Colors.textPrimary,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalScrollContent: {
+    paddingBottom: Theme.spacing.lg,
+  },
+  modalSection: {
+    marginBottom: Theme.spacing.lg,
+  },
+  modalSecTitle: {
+    color: Colors.secondary,
+    fontSize: 14,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  modalText: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  modalSubtext: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 4,
+  },
+  highlightText: {
+    color: Colors.secondary,
+    fontWeight: 'bold',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border + '30',
+  },
+  detailKey: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+  },
+  detailVal: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  contactLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  contactLinkText: {
+    color: Colors.textPrimary,
+    fontSize: 13,
+    textDecorationLine: 'underline',
+  },
+  modalCloseBtn: {
+    marginTop: Theme.spacing.md,
   },
 });

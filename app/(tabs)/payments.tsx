@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { ViewStyle } from 'react-native';
-import { StyleSheet, View, Text, FlatList, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, FlatList, RefreshControl, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Badge, StatCard } from '../../src/components/ui';
 import { PaymentRepository, RoundRepository, ChitRepository, AuctionRepository, Payment, MonthlyRound, Chit, Auction } from '../../src/database';
+import { ChitService } from '../../src/services/chitService';
 
 export default function PaymentsScreen() {
   const router = useRouter();
@@ -24,6 +25,11 @@ export default function PaymentsScreen() {
     partial_count: 0,
     pending_count: 0
   });
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredPayments = payments.filter(p =>
+    p.member_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const loadData = useCallback(async () => {
     try {
@@ -34,6 +40,11 @@ export default function PaymentsScreen() {
       const chit = await chitRepo.getActiveChit();
       if (chit) {
         setActiveChit(chit);
+        
+        // Auto-heal any missing payments for members (e.g. if member was added after starting chit)
+        const chitService = new ChitService();
+        chitService.healMissingPayments(chit.id).catch(err => console.error("Auto-heal payments failed:", err));
+
         const rounds = await roundRepo.getRoundsByChit(chit.id);
         setAllRounds(rounds);
         
@@ -81,12 +92,13 @@ export default function PaymentsScreen() {
   );
 
   useEffect(() => {
+    setSearchQuery('');
     loadRoundData();
-  }, [loadRoundData]);
+  }, [loadRoundData, selectedRoundId]);
 
   const hasAuction = roundAuctions.length > 0;
 
-  if (loading) return <View style={styles.container} />;
+  if (loading && payments.length === 0 && !activeChit) return <View style={styles.container} />;
 
   if (!activeChit) {
     return (
@@ -257,18 +269,48 @@ export default function PaymentsScreen() {
         </View>
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search members..."
+            placeholderTextColor={Colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={18} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       <FlatList
-        data={payments}
+        data={filteredPayments}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderPayment}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} tintColor={Colors.secondary} />}
         ListEmptyComponent={
-          <EmptyState 
-            icon="cash-outline"
-            title="No Payments"
-            message="Payment entries will appear when the month is started."
-          />
+          searchQuery.trim() !== '' ? (
+            <EmptyState 
+              icon="search-outline"
+              title="No Results Found"
+              message={`No members match "${searchQuery}"`}
+              actionLabel="Clear Search"
+              onAction={() => setSearchQuery('')}
+            />
+          ) : (
+            <EmptyState 
+              icon="cash-outline"
+              title="No Payments"
+              message="Payment entries will appear when the month is started."
+            />
+          )
         }
       />
     </View>
@@ -287,13 +329,13 @@ const styles = StyleSheet.create({
   },
   monthScroll: {
     paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.md,
+    paddingVertical: Theme.spacing.xs,
   },
   monthTab: {
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: 6,
     borderRadius: Theme.borderRadius.round,
-    marginRight: Theme.spacing.md,
+    marginRight: Theme.spacing.sm,
     backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -305,13 +347,14 @@ const styles = StyleSheet.create({
   monthTabText: {
     color: Colors.textSecondary,
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 13,
   },
   activeMonthTabText: {
     color: Colors.textPrimary,
   },
   summaryContainer: {
-    padding: Theme.spacing.lg,
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.md,
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -320,30 +363,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    marginBottom: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
   },
   summaryTitle: {
     color: Colors.textPrimary,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   summarySubtitle: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
   },
   auctionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.success + '15',
     borderRadius: Theme.borderRadius.sm,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: 6,
-    marginBottom: Theme.spacing.md,
-    gap: 6,
+    paddingHorizontal: Theme.spacing.sm,
+    paddingVertical: 4,
+    marginBottom: Theme.spacing.sm,
+    gap: 4,
   },
   auctionBannerText: {
     color: Colors.success,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     flex: 1,
   },
@@ -356,25 +399,27 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     textTransform: 'uppercase',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   statValue: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   listContent: {
-    padding: Theme.spacing.lg,
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.sm,
     paddingBottom: 100,
   },
   paymentCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Theme.spacing.md,
-    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.sm,
   },
   overpaidCard: {
     borderLeftWidth: 4,
@@ -392,13 +437,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Theme.spacing.md,
+    marginRight: Theme.spacing.sm,
   },
   overpaidAvatar: {
     backgroundColor: '#F59E0B',
@@ -409,13 +454,14 @@ const styles = StyleSheet.create({
   avatarText: {
     color: Colors.textPrimary,
     fontWeight: 'bold',
+    fontSize: 13,
   },
   details: {
     flex: 1,
   },
   memberName: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   overpaidName: {
@@ -424,15 +470,15 @@ const styles = StyleSheet.create({
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 1,
   },
   amountText: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
   },
   dueText: {
     color: Colors.error,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
   },
   defaulterCard: {
@@ -445,5 +491,35 @@ const styles = StyleSheet.create({
   },
   defaulterName: {
     color: Colors.error,
+  },
+  searchContainer: {
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.xs,
+    backgroundColor: Colors.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: Theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Theme.spacing.md,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: Theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 15,
+    height: '100%',
+    padding: 0,
+  },
+  clearButton: {
+    padding: 4,
   },
 });

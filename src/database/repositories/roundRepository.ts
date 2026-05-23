@@ -1,52 +1,30 @@
-import { supabase } from '../supabase';
+import { LocalDatabase } from '../localDb';
 import { MonthlyRound } from '../types';
 
 export class RoundRepository {
   async createRound(data: Omit<MonthlyRound, 'id' | 'created_at'>): Promise<number> {
-    const { data: result, error } = await supabase
-      .from('monthly_rounds')
-      .insert([data])
-      .select('id')
-      .single();
-
-    if (error) throw error;
+    const result = await LocalDatabase.insert<MonthlyRound>('monthly_rounds', data);
     return result.id;
   }
 
   async getRoundsByChit(chitId: number): Promise<MonthlyRound[]> {
-    const { data, error } = await supabase
-      .from('monthly_rounds')
-      .select('*')
-      .eq('chit_id', chitId)
-      .order('month_number', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
+    const rows = LocalDatabase.getTable<MonthlyRound>('monthly_rounds');
+    return rows
+      .filter(r => r.chit_id === chitId)
+      .sort((a, b) => a.month_number - b.month_number);
   }
 
   async getRoundById(id: number): Promise<MonthlyRound | null> {
-    const { data, error } = await supabase
-      .from('monthly_rounds')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error;
-    return data || null;
+    return LocalDatabase.getById<MonthlyRound>('monthly_rounds', id);
   }
 
   async getCurrentRound(chitId: number): Promise<MonthlyRound | null> {
-    const { data, error } = await supabase
-      .from('monthly_rounds')
-      .select('*')
-      .eq('chit_id', chitId)
-      .eq('status', 'pending')
-      .order('month_number', { ascending: true })
-      .limit(1)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error;
-    return data || null;
+    const rows = LocalDatabase.getTable<MonthlyRound>('monthly_rounds');
+    const pending = rows
+      .filter(r => r.chit_id === chitId && r.status === 'pending')
+      .sort((a, b) => a.month_number - b.month_number);
+    
+    return pending.length > 0 ? pending[0] : null;
   }
 
   async updateRoundStatus(id: number, status: 'pending' | 'completed', roundDate?: string): Promise<void> {
@@ -54,21 +32,10 @@ export class RoundRepository {
     if (roundDate) {
       updateData.round_date = roundDate;
     }
-
-    const { error } = await supabase
-      .from('monthly_rounds')
-      .update(updateData)
-      .eq('id', id);
-
-    if (error) throw error;
+    await LocalDatabase.update<MonthlyRound>('monthly_rounds', id, updateData);
   }
 
   async markAsDoublePata(id: number): Promise<void> {
-    const { error } = await supabase
-      .from('monthly_rounds')
-      .update({ is_double_pata: 1 })
-      .eq('id', id);
-
-    if (error) throw error;
+    await LocalDatabase.update<MonthlyRound>('monthly_rounds', id, { is_double_pata: 1 });
   }
 }

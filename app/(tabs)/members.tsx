@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, FlatList, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, FlatList, Text, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
@@ -12,6 +12,12 @@ export default function MembersScreen() {
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredMembers = members.filter(m =>
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (m.phone && m.phone.includes(searchQuery))
+  );
 
   const loadData = useCallback(async () => {
     try {
@@ -58,7 +64,7 @@ export default function MembersScreen() {
     </Card>
   );
 
-  if (loading) {
+  if (loading && members.length === 0 && !activeChit) {
     return <View style={styles.container} />;
   }
 
@@ -88,19 +94,49 @@ export default function MembersScreen() {
         />
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={20} color={Colors.textSecondary} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search members..."
+            placeholderTextColor={Colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+              <Ionicons name="close-circle" size={18} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       <FlatList
-        data={members}
+        data={filteredMembers}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderMember}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
-          <EmptyState 
-            icon="people-outline"
-            title="No Members"
-            message={`Start adding the ${activeChit.member_count} members for this chit fund.`}
-            actionLabel="Add First Member"
-            onAction={() => router.push('/add-member')}
-          />
+          searchQuery.trim() !== '' ? (
+            <EmptyState 
+              icon="search-outline"
+              title="No Members Found"
+              message={`No members match "${searchQuery}"`}
+              actionLabel="Clear Search"
+              onAction={() => setSearchQuery('')}
+            />
+          ) : (
+            <EmptyState 
+              icon="people-outline"
+              title="No Members"
+              message={`Start adding the ${activeChit.member_count} members for this chit fund.`}
+              actionLabel="Add First Member"
+              onAction={() => router.push('/add-member')}
+            />
+          )
         }
       />
     </View>
@@ -174,5 +210,35 @@ const styles = StyleSheet.create({
   },
   memberStatus: {
     marginLeft: Theme.spacing.sm,
+  },
+  searchContainer: {
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.md,
+    backgroundColor: Colors.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Theme.spacing.md,
+    height: 48,
+  },
+  searchIcon: {
+    marginRight: Theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: Colors.textPrimary,
+    fontSize: 16,
+    height: '100%',
+    padding: 0, // React Native TextInput padding override
+  },
+  clearButton: {
+    padding: 4,
   },
 });

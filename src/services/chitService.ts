@@ -187,6 +187,45 @@ export class ChitService {
     await paymentRepo.addTransaction(paymentId, newAmount, notes);
   }
 
+  async recalculatePayment(paymentId: number): Promise<void> {
+    const paymentRepo = new PaymentRepository();
+    const payment = await paymentRepo.getPaymentById(paymentId);
+    if (!payment) throw new Error('Payment record not found');
+
+    const transactions = await paymentRepo.getTransactionsByPayment(paymentId);
+    const totalPaid = transactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+    let status: Payment['status'] = 'pending';
+    if (totalPaid > payment.expected_amount) {
+      status = 'overpaid';
+    } else if (totalPaid === payment.expected_amount) {
+      status = payment.status === 'refunded' ? 'refunded' : 'paid';
+    } else if (totalPaid > 0) {
+      status = 'partial';
+    }
+
+    const latestTx = transactions[0];
+
+    await paymentRepo.updatePayment(paymentId, {
+      paid_amount: totalPaid,
+      status,
+      notes: latestTx ? (latestTx.notes || null) : null,
+      payment_date: latestTx ? (latestTx.payment_date || null) : null
+    });
+  }
+
+  async updatePaymentTransaction(paymentId: number, transactionId: number, amount: number, notes?: string, paymentDate?: string): Promise<void> {
+    const paymentRepo = new PaymentRepository();
+    await paymentRepo.updateTransaction(transactionId, { amount, notes, payment_date: paymentDate });
+    await this.recalculatePayment(paymentId);
+  }
+
+  async deletePaymentTransaction(paymentId: number, transactionId: number): Promise<void> {
+    const paymentRepo = new PaymentRepository();
+    await paymentRepo.deleteTransaction(transactionId);
+    await this.recalculatePayment(paymentId);
+  }
+
   async getFinancialSummary(chitId: number): Promise<any> {
     const auctionRepo = new AuctionRepository();
     const paymentRepo = new PaymentRepository();
@@ -211,5 +250,38 @@ export class ChitService {
       winnerCount: winners.length,
       currentMonth
     };
+  }
+
+  async healMissingPayments(chitId: number): Promise<void> {
+    const memberRepo = new MemberRepository();
+    const roundRepo = new RoundRepository();
+    const paymentRepo = new PaymentRepository();
+    const chitRepo = new ChitRepository();
+
+    const chit = await chitRepo.getChitById(chitId);
+    if (!chit) return;
+
+    const members = await memberRepo.getMembersByChit(chitId);
+    const rounds = await roundRepo.getRoundsByChit(chitId);
+
+    if (members.length === 0 || rounds.length === 0) return;
+
+    for (const round of rounds) {
+      const existingPayments = await paymentRepo.getPaymentsByRound(round.id);
+      const existingMemberIds = new Set(existingPayments.map(p => p.member_id));
+
+      const missingMembers = members.filter(m => !existingMemberIds.has(m.id));
+
+      if (missingMembers.length > 0) {
+        let expectedAmount = chit.monthly_contribution;
+        if (existingPayments.length > 0) {
+          expectedAmount = existingPayments[0].expected_amount;
+        }
+
+        const missingMemberIds = missingMembers.map(m => m.id);
+        await paymentRepo.createPaymentEntries(round.id, missingMemberIds, expectedAmount);
+        console.log(`Healed ${missingMemberIds.length} missing payments for round ${round.id}`);
+      }
+    }
   }
 }

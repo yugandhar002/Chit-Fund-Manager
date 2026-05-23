@@ -115,7 +115,7 @@ export default function AuctionScreen() {
     }
   };
 
-  if (loading) return <View style={styles.container} />;
+  if (loading && auctions.length === 0 && !activeChit) return <View style={styles.container} />;
 
   if (!activeChit) {
     return (

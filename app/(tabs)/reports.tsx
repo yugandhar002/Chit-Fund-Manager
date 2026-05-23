@@ -56,7 +56,7 @@ export default function ReportsScreen() {
     }, [loadData])
   );
 
-  if (loading) return <View style={styles.container} />;
+  if (loading && outstanding.length === 0 && !activeChit) return <View style={styles.container} />;
 
   if (!activeChit) {
     return (
