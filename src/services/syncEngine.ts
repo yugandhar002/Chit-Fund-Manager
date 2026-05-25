@@ -42,19 +42,26 @@ class SyncEngineManager {
         let success = false;
         console.log(`SyncEngine: Processing action ${action.action} on ${action.table} for ID ${action.recordId}`);
 
+        // Prepare raw payload to push, filtering out created_at/updated_at for payment_transactions
+        let dataToPush = action.data ? { ...action.data } : undefined;
+        if (dataToPush && action.table === 'payment_transactions') {
+          delete dataToPush.created_at;
+          delete dataToPush.updated_at;
+        }
+
         try {
           if (action.action === 'insert') {
             // Using upsert to avoid conflicts on retries
             const { error } = await supabase
               .from(action.table)
-              .upsert(action.data);
+              .upsert(dataToPush);
             if (!error) success = true;
             else console.error('Supabase insert error:', error);
           } 
           else if (action.action === 'update') {
             const { error } = await supabase
               .from(action.table)
-              .update(action.data)
+              .update(dataToPush)
               .eq('id', action.recordId);
             if (!error) success = true;
             else console.error('Supabase update error:', error);
