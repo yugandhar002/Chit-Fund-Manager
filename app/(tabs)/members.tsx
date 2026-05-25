@@ -6,6 +6,7 @@ import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge } from '../../src/components/ui';
 import { MemberRepository, ChitRepository, Member, Chit } from '../../src/database';
+import { SyncEngine } from '../../src/services/syncEngine';
 
 export default function MembersScreen() {
   const router = useRouter();
@@ -40,7 +41,25 @@ export default function MembersScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // First load local data immediately
       loadData();
+
+      // Silently sync with cloud on screen focus
+      SyncEngine.syncAll()
+        .then(() => {
+          loadData();
+        })
+        .catch(err => console.error('Members screen sync error:', err));
+
+      // Subscribe to any database update events (from polling/realtime)
+      const unsubscribe = SyncEngine.subscribe(() => {
+        console.log('MembersScreen: Sync update received, reloading...');
+        loadData();
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }, [loadData])
   );
 

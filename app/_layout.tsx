@@ -10,6 +10,7 @@ import 'react-native-reanimated';
 import { Colors } from '../src/constants/colors';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { queryClient, asyncStoragePersister } from '../src/lib/queryClient';
+import { SyncEngine } from '../src/services/syncEngine';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -48,6 +49,24 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
+  useEffect(() => {
+    // Start Supabase Realtime changes subscription
+    SyncEngine.startRealtimeSubscription();
+
+    // Start background polling loop (every 15 seconds)
+    const pollInterval = setInterval(() => {
+      console.log('Global Background Sync: Triggering scheduled sync cycle...');
+      SyncEngine.syncAll().catch(err => console.error('Global Background Sync error:', err));
+    }, 1000 * 15);
+
+    // Clean up when application layout unmounts
+    return () => {
+      console.log('Global Background Sync: Cleaning up subscriptions and timers...');
+      clearInterval(pollInterval);
+      SyncEngine.stopRealtimeSubscription();
+    };
+  }, []);
+
   return (
     <PersistQueryClientProvider
       client={queryClient}

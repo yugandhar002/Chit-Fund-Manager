@@ -85,6 +85,16 @@ export default function DashboardScreen() {
           refetch();
         })
         .catch(err => console.error('Dashboard Sync error:', err));
+
+      // Listen for background sync updates (e.g. from polling or realtime)
+      const unsubscribe = SyncEngine.subscribe(() => {
+        console.log('DashboardScreen: Sync update received, refetching...');
+        refetch();
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }, [refetch])
   );
 

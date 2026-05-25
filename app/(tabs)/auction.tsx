@@ -7,6 +7,7 @@ import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge, StatCard } from '../../src/components/ui';
 import { RoundRepository, AuctionRepository, ChitRepository, PaymentRepository, MonthlyRound, Auction, Chit } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
+import { SyncEngine } from '../../src/services/syncEngine';
 import { Alert } from 'react-native';
 
 interface OverpaidMember {
@@ -73,7 +74,25 @@ export default function AuctionScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // First load local data immediately
       loadData();
+
+      // Silently sync with cloud on screen focus
+      SyncEngine.syncAll()
+        .then(() => {
+          loadData();
+        })
+        .catch(err => console.error('Auction screen sync error:', err));
+
+      // Subscribe to any database update events (from polling/realtime)
+      const unsubscribe = SyncEngine.subscribe(() => {
+        console.log('AuctionScreen: Sync update received, reloading...');
+        loadData();
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }, [loadData])
   );
 

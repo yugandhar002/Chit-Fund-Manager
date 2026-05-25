@@ -3,6 +3,28 @@ import { LocalDatabase, SyncAction } from '../database/localDb';
 
 class SyncEngineManager {
   private syncing = false;
+  private listeners: Array<() => void> = [];
+  private realtimeChannel: any = null;
+
+  subscribe(callback: () => void) {
+    this.listeners.push(callback);
+    return () => this.unsubscribe(callback);
+  }
+
+  unsubscribe(callback: () => void) {
+    this.listeners = this.listeners.filter(cb => cb !== callback);
+  }
+
+  private notifyListeners() {
+    console.log(`SyncEngine: Notifying ${this.listeners.length} listeners of data update.`);
+    this.listeners.forEach(cb => {
+      try {
+        cb();
+      } catch (err) {
+        console.error('SyncEngine listener error:', err);
+      }
+    });
+  }
 
   /**
    * Pushes all pending local changes in the queue to Supabase.
@@ -119,6 +141,7 @@ class SyncEngineManager {
       }
 
       console.log('SyncEngine: Pull and merge fully succeeded.');
+      this.notifyListeners();
     } catch (e) {
       console.error('SyncEngine: Pull from cloud failed:', e);
     }
@@ -132,6 +155,41 @@ class SyncEngineManager {
     await this.pushQueue();
     // 2. Fetch fresh cloud data
     await this.pullFromCloud();
+  }
+
+  startRealtimeSubscription() {
+    if (this.realtimeChannel) {
+      console.log('SyncEngine: Realtime subscription already active.');
+      return;
+    }
+
+    console.log('SyncEngine: Initializing Supabase Realtime subscription...');
+    
+    this.realtimeChannel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+        },
+        async (payload) => {
+          console.log('SyncEngine: Received realtime DB change payload:', payload);
+          // We pull fresh cloud data and merge it locally
+          await this.pullFromCloud();
+        }
+      )
+      .subscribe((status) => {
+        console.log(`SyncEngine: Realtime subscription status: ${status}`);
+      });
+  }
+
+  stopRealtimeSubscription() {
+    if (this.realtimeChannel) {
+      console.log('SyncEngine: Stopping Supabase Realtime subscription...');
+      supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
   }
 }
 
