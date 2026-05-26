@@ -46,11 +46,15 @@ class SyncEngineManager {
         let success = false;
         console.log(`SyncEngine: Processing action ${action.action} on ${action.table} for ID ${action.recordId}`);
 
-        // Prepare raw payload to push, filtering out created_at/updated_at for payment_transactions
+        // Prepare raw payload to push, filtering out fields not present in Supabase schemas
         let dataToPush = action.data ? { ...action.data } : undefined;
-        if (dataToPush && action.table === 'payment_transactions') {
-          delete dataToPush.created_at;
-          delete dataToPush.updated_at;
+        if (dataToPush) {
+          if (action.table === 'payment_transactions') {
+            delete dataToPush.created_at;
+            delete dataToPush.updated_at;
+          } else if (action.table !== 'payments') {
+            delete dataToPush.updated_at;
+          }
         }
 
         try {
