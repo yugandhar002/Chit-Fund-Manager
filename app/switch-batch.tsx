@@ -47,22 +47,38 @@ export default function SwitchBatchScreen() {
   };
 
   const handleDeleteBatch = (id: number, name: string) => {
+    // Step 1: First Critical warning alert
     Alert.alert(
-      'Delete Chit Fund',
-      `Are you sure you want to permanently delete "${name}"? This will wipe out all members, payments, and history. This cannot be undone.`,
+      '⚠️ CRITICAL WARNING: Delete Chit Fund?',
+      `Are you sure you want to permanently delete "${name}"?\n\nThis will instantly destroy all members, payments, rounds, and auctions linked to it. This action CANNOT be undone and there is NO recovery.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Delete', 
+          text: 'Proceed to Confirm', 
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const repo = new ChitRepository();
-              await repo.deleteChit(id);
-              loadData();
-            } catch (e: any) {
-              console.error('Failed to delete chit fund:', e.message);
-            }
+          onPress: () => {
+            // Step 2: Final absolute confirmation alert
+            Alert.alert(
+              '🛑 FINAL CONFIRMATION REQUIRED',
+              `Is "${name}" a MOCK/TEST chit fund?\n\nIf this is your REAL active money group, DO NOT proceed! Are you absolutely, 100% sure you want to permanently wipe out this data?`,
+              [
+                { text: 'NO, CANCEL', style: 'cancel' },
+                { 
+                  text: 'YES, DELETE PERMANENTLY', 
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const repo = new ChitRepository();
+                      await repo.deleteChit(id);
+                      loadData();
+                    } catch (e: any) {
+                      console.error('Failed to delete chit fund:', e.message);
+                      Alert.alert('Sync Delete Error', 'Could not delete from cloud. Ensure the database cascade drop script was run in your SQL Editor.');
+                    }
+                  }
+                }
+              ]
+            );
           }
         }
       ]
