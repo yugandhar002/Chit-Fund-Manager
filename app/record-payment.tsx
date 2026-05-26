@@ -86,9 +86,18 @@ export default function RecordPaymentScreen() {
     try {
       const service = new ChitService();
       await service.addPaymentTransaction(payment.id, paidAmountPaisa, notes);
-      router.back();
+      
+      // Clear form inputs for the next entry
+      setAmount('');
+      setNotes('');
+      
+      // Reload current payment stats and transaction list
+      await loadData();
+      
+      Alert.alert('Success', 'Payment transaction added successfully!');
     } catch (e: any) {
       console.error('Failed to record payment:', e.message);
+      Alert.alert('Error', 'Failed to record payment transaction.');
     } finally {
       setSaving(false);
     }
