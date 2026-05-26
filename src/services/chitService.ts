@@ -159,7 +159,7 @@ export class ChitService {
     return await auctionRepo.recordAuction(data);
   }
 
-  async addPaymentTransaction(paymentId: number, newAmount: number, notes?: string): Promise<void> {
+  async addPaymentTransaction(paymentId: number, newAmount: number, notes?: string, paymentDate?: string): Promise<void> {
     const paymentRepo = new PaymentRepository();
     const payment = await paymentRepo.getPaymentById(paymentId);
     if (!payment) throw new Error('Payment record not found');
@@ -178,14 +178,16 @@ export class ChitService {
       status = 'partial';
     }
 
+    const finalDate = paymentDate || new Date().toISOString();
+
     await paymentRepo.updatePayment(paymentId, {
       paid_amount: totalPaid,
       status,
       notes: notes || undefined,
-      payment_date: new Date().toISOString()
+      payment_date: finalDate
     });
 
-    await paymentRepo.addTransaction(paymentId, newAmount, notes);
+    await paymentRepo.addTransaction(paymentId, newAmount, notes, finalDate);
   }
 
   async recalculatePayment(paymentId: number): Promise<void> {

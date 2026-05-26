@@ -24,6 +24,8 @@ export default function RecordPaymentScreen() {
   // Form State
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentDate, setPaymentDate] = useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
 
   const handleQuickAdd = (value: number) => {
@@ -85,16 +87,15 @@ export default function RecordPaymentScreen() {
     setSaving(true);
     try {
       const service = new ChitService();
-      await service.addPaymentTransaction(payment.id, paidAmountPaisa, notes);
+      await service.addPaymentTransaction(payment.id, paidAmountPaisa, notes, paymentDate.toISOString());
       
       // Clear form inputs for the next entry
       setAmount('');
       setNotes('');
+      setPaymentDate(new Date());
       
       // Reload current payment stats and transaction list
       await loadData();
-      
-      Alert.alert('Success', 'Payment transaction added successfully!');
     } catch (e: any) {
       console.error('Failed to record payment:', e.message);
       Alert.alert('Error', 'Failed to record payment transaction.');
@@ -262,6 +263,31 @@ export default function RecordPaymentScreen() {
             </ScrollView>
           )}
         </View>
+
+        <View style={styles.dateSelectorContainer}>
+          <Text style={styles.dateSelectorLabel}>Payment Date</Text>
+          <TouchableOpacity 
+            style={styles.dateSelectorBtn} 
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Text style={styles.dateSelectorBtnText}>{format(paymentDate, 'dd MMM yyyy')}</Text>
+            <Ionicons name="calendar-outline" size={18} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={paymentDate}
+            mode="date"
+            display="default"
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(Platform.OS === 'ios');
+              if (selectedDate) {
+                setPaymentDate(selectedDate);
+              }
+            }}
+          />
+        )}
 
         <TextField
           label="Notes (Optional)"

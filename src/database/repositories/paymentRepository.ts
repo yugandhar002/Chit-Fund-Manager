@@ -165,7 +165,7 @@ export class PaymentRepository {
     return result.sort((a, b) => b.net_due - a.net_due);
   }
 
-  async addTransaction(paymentId: number, amount: number, notes?: string): Promise<void> {
+  async addTransaction(paymentId: number, amount: number, notes?: string, paymentDate?: string): Promise<void> {
     const payment = LocalDatabase.getById<Payment>('payments', paymentId);
     if (!payment) return;
 
@@ -173,7 +173,7 @@ export class PaymentRepository {
       payment_id: paymentId,
       amount,
       notes: notes || '',
-      payment_date: new Date().toISOString()
+      payment_date: paymentDate || new Date().toISOString()
     });
   }
 
