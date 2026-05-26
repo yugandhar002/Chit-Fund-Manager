@@ -30,6 +30,10 @@ class SyncEngineManager {
    * Pushes all pending local changes in the queue to Supabase.
    */
   async pushQueue(): Promise<void> {
+    if (!supabase) {
+      console.warn('SyncEngine: Supabase client not initialized. Push cycle aborted.');
+      return;
+    }
     if (this.syncing) return;
     this.syncing = true;
     console.log('SyncEngine: Starting push cycle...');
@@ -99,6 +103,10 @@ class SyncEngineManager {
    * Pulls all table data from Supabase and merges it into local storage.
    */
   async pullFromCloud(): Promise<void> {
+    if (!supabase) {
+      console.warn('SyncEngine: Supabase client not initialized. Pull cycle aborted.');
+      return;
+    }
     console.log('SyncEngine: Initiating pull from cloud...');
     try {
       await LocalDatabase.init();
@@ -165,6 +173,10 @@ class SyncEngineManager {
   }
 
   startRealtimeSubscription() {
+    if (!supabase) {
+      console.warn('SyncEngine: Supabase client not initialized. Realtime subscription aborted.');
+      return;
+    }
     if (this.realtimeChannel) {
       console.log('SyncEngine: Realtime subscription already active.');
       return;
@@ -180,18 +192,19 @@ class SyncEngineManager {
           event: '*',
           schema: 'public',
         },
-        async (payload) => {
+        async (payload: any) => {
           console.log('SyncEngine: Received realtime DB change payload:', payload);
           // We pull fresh cloud data and merge it locally
           await this.pullFromCloud();
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: any) => {
         console.log(`SyncEngine: Realtime subscription status: ${status}`);
       });
   }
 
   stopRealtimeSubscription() {
+    if (!supabase) return;
     if (this.realtimeChannel) {
       console.log('SyncEngine: Stopping Supabase Realtime subscription...');
       supabase.removeChannel(this.realtimeChannel);
