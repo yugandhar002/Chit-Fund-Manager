@@ -30,13 +30,19 @@ export class PaymentRepository {
     const payments = LocalDatabase.getTable<Payment>('payments')
       .filter(p => p.round_id === roundId);
 
-    const result = payments.map(p => {
+    const result: (Payment & { member_name: string })[] = [];
+    for (const p of payments) {
       const member = LocalDatabase.getById<Member>('members', p.member_id);
-      return {
-        ...p,
-        member_name: member?.name || 'Unknown'
-      };
-    });
+      if (member) {
+        result.push({
+          ...p,
+          member_name: member.name
+        });
+      } else {
+        // Proactively delete orphaned local payment from cache & sync queue
+        LocalDatabase.delete('payments', p.id).catch(err => console.error('Failed to clean up orphaned payment:', err));
+      }
+    }
 
     return result.sort((a, b) => {
       const dateA = new Date(a.updated_at || a.created_at || 0).getTime();

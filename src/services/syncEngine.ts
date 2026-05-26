@@ -63,8 +63,15 @@ class SyncEngineManager {
             const { error } = await supabase
               .from(action.table)
               .upsert(dataToPush);
-            if (!error) success = true;
-            else console.error('Supabase insert error:', error);
+            if (!error) {
+              success = true;
+            } else {
+              console.error('Supabase insert error:', error);
+              if (error.code === '23505') {
+                console.log('SyncEngine: Duplicate key conflict detected (23505). Record already exists on cloud. Dequeuing as success.');
+                success = true;
+              }
+            }
           } 
           else if (action.action === 'update') {
             const { error } = await supabase

@@ -6,6 +6,7 @@ import { PaymentRepository } from '../database/repositories/paymentRepository';
 import { Payment } from '../database/types';
 
 export class ChitService {
+  private static healingChits = new Set<number>();
   async startChitFund(chitId: number): Promise<void> {
     const chitRepo = new ChitRepository();
     const roundRepo = new RoundRepository();
@@ -253,35 +254,44 @@ export class ChitService {
   }
 
   async healMissingPayments(chitId: number): Promise<void> {
-    const memberRepo = new MemberRepository();
-    const roundRepo = new RoundRepository();
-    const paymentRepo = new PaymentRepository();
-    const chitRepo = new ChitRepository();
+    if (ChitService.healingChits.has(chitId)) {
+      return;
+    }
+    ChitService.healingChits.add(chitId);
 
-    const chit = await chitRepo.getChitById(chitId);
-    if (!chit) return;
+    try {
+      const memberRepo = new MemberRepository();
+      const roundRepo = new RoundRepository();
+      const paymentRepo = new PaymentRepository();
+      const chitRepo = new ChitRepository();
 
-    const members = await memberRepo.getMembersByChit(chitId);
-    const rounds = await roundRepo.getRoundsByChit(chitId);
+      const chit = await chitRepo.getChitById(chitId);
+      if (!chit) return;
 
-    if (members.length === 0 || rounds.length === 0) return;
+      const members = await memberRepo.getMembersByChit(chitId);
+      const rounds = await roundRepo.getRoundsByChit(chitId);
 
-    for (const round of rounds) {
-      const existingPayments = await paymentRepo.getPaymentsByRound(round.id);
-      const existingMemberIds = new Set(existingPayments.map(p => p.member_id));
+      if (members.length === 0 || rounds.length === 0) return;
 
-      const missingMembers = members.filter(m => !existingMemberIds.has(m.id));
+      for (const round of rounds) {
+        const existingPayments = await paymentRepo.getPaymentsByRound(round.id);
+        const existingMemberIds = new Set(existingPayments.map(p => p.member_id));
 
-      if (missingMembers.length > 0) {
-        let expectedAmount = chit.monthly_contribution;
-        if (existingPayments.length > 0) {
-          expectedAmount = existingPayments[0].expected_amount;
+        const missingMembers = members.filter(m => !existingMemberIds.has(m.id));
+
+        if (missingMembers.length > 0) {
+          let expectedAmount = chit.monthly_contribution;
+          if (existingPayments.length > 0) {
+            expectedAmount = existingPayments[0].expected_amount;
+          }
+
+          const missingMemberIds = missingMembers.map(m => m.id);
+          await paymentRepo.createPaymentEntries(round.id, missingMemberIds, expectedAmount);
+          console.log(`Healed ${missingMemberIds.length} missing payments for round ${round.id}`);
         }
-
-        const missingMemberIds = missingMembers.map(m => m.id);
-        await paymentRepo.createPaymentEntries(round.id, missingMemberIds, expectedAmount);
-        console.log(`Healed ${missingMemberIds.length} missing payments for round ${round.id}`);
       }
+    } finally {
+      ChitService.healingChits.delete(chitId);
     }
   }
 }
