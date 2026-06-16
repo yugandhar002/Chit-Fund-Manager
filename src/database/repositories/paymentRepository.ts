@@ -1,17 +1,34 @@
-import { LocalDatabase } from '../localDb';
-import { Payment, Member, MonthlyRound, PaymentTransaction } from '../types';
+import { supabase } from '../supabase';
+import { Payment, PaymentTransaction } from '../types';
 
 export class PaymentRepository {
   async createPaymentEntries(roundId: number, memberIds: number[], expectedAmount: number): Promise<void> {
-    for (const memberId of memberIds) {
-      await LocalDatabase.insert<Payment>('payments', {
+    if (memberIds.length === 0) return;
+    
+    const { data: existing } = await supabase
+      .from('payments')
+      .select('member_id')
+      .eq('round_id', roundId)
+      .in('member_id', memberIds);
+      
+    const existingIds = new Set((existing || []).map((p: any) => p.member_id));
+    
+    const toInsert = memberIds
+      .filter(id => !existingIds.has(id))
+      .map(memberId => ({
         round_id: roundId,
         member_id: memberId,
         expected_amount: expectedAmount,
         paid_amount: 0,
         status: 'pending',
-        notes: ''
-      });
+        notes: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+      
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from('payments').insert(toInsert);
+      if (error) throw error;
     }
   }
 
@@ -19,30 +36,42 @@ export class PaymentRepository {
     const updateData: any = {
       paid_amount: data.paid_amount,
       status: data.status,
+      updated_at: new Date().toISOString()
     };
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.payment_date !== undefined) updateData.payment_date = data.payment_date;
 
-    await LocalDatabase.update<Payment>('payments', id, updateData);
+    const { error } = await supabase.from('payments').update(updateData).eq('id', id);
+    if (error) throw error;
   }
 
   async getPaymentsByRound(roundId: number): Promise<(Payment & { member_name: string })[]> {
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => p.round_id === roundId);
-
-    const result: (Payment & { member_name: string })[] = [];
+    const { data: paymentsData, error } = await supabase
+      .from('payments')
+      .select(`
+        *,
+        members!inner (
+          name
+        )
+      `)
+      .eq('round_id', roundId);
+      
+    if (error) throw error;
+    
+    const payments = paymentsData || [];
+    
+    const memberPaymentMap = new Map<number, any>();
     for (const p of payments) {
-      const member = LocalDatabase.getById<Member>('members', p.member_id);
-      if (member) {
-        result.push({
-          ...p,
-          member_name: member.name
-        });
-      } else {
-        // Proactively delete orphaned local payment from cache & sync queue
-        LocalDatabase.delete('payments', p.id).catch(err => console.error('Failed to clean up orphaned payment:', err));
+      const existing = memberPaymentMap.get(p.member_id);
+      if (!existing || (p.paid_amount || 0) > (existing.paid_amount || 0)) {
+        memberPaymentMap.set(p.member_id, p);
       }
     }
+
+    const result = Array.from(memberPaymentMap.values()).map(p => ({
+      ...p,
+      member_name: p.members.name
+    }));
 
     return result.sort((a, b) => {
       const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
@@ -55,27 +84,44 @@ export class PaymentRepository {
   }
 
   async getPaymentsByMember(memberId: number): Promise<(Payment & { month_number: number })[]> {
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => p.member_id === memberId);
+    const { data, error } = await supabase
+      .from('payments')
+      .select(`
+        *,
+        monthly_rounds!inner (
+          month_number
+        )
+      `)
+      .eq('member_id', memberId);
+      
+    if (error) throw error;
+    
+    const result = (data || []).map((p: any) => ({
+      ...p,
+      month_number: p.monthly_rounds.month_number
+    }));
 
-    const result = payments.map(p => {
-      const round = LocalDatabase.getById<MonthlyRound>('monthly_rounds', p.round_id);
-      return {
-        ...p,
-        month_number: round?.month_number || 0
-      };
-    });
-
-    return result.sort((a, b) => a.month_number - b.month_number);
+    return result.sort((a: any, b: any) => a.month_number - b.month_number);
   }
 
   async getPaymentSummary(roundId: number): Promise<{ total_expected: number, total_paid: number, paid_count: number, partial_count: number, pending_count: number }> {
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => p.round_id === roundId);
+    const { data: paymentsData, error } = await supabase
+      .from('payments')
+      .select('member_id, expected_amount, paid_amount, status')
+      .eq('round_id', roundId);
+      
+    if (error) throw error;
+
+    const seenMemberIds = new Set<number>();
+    const validPayments = (paymentsData || []).filter((p: any) => {
+      if (seenMemberIds.has(p.member_id)) return false;
+      seenMemberIds.add(p.member_id);
+      return true;
+    });
 
     const summary = { total_expected: 0, total_paid: 0, paid_count: 0, partial_count: 0, pending_count: 0 };
 
-    payments.forEach(p => {
+    validPayments.forEach((p: any) => {
       summary.total_expected += p.expected_amount || 0;
       summary.total_paid += p.paid_amount || 0;
       if (p.status === 'paid' || p.status === 'refunded' || p.status === 'overpaid') summary.paid_count++;
@@ -87,34 +133,47 @@ export class PaymentRepository {
   }
 
   async getPaymentById(id: number): Promise<Payment | null> {
-    return LocalDatabase.getById<Payment>('payments', id);
+    const { data, error } = await supabase.from('payments').select('*').eq('id', id).single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
   }
 
   async updateExpectedAmountsForRound(roundId: number, newExpectedAmount: number): Promise<void> {
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => p.round_id === roundId);
-
-    for (const payment of payments) {
-      await LocalDatabase.update<Payment>('payments', payment.id, {
-        expected_amount: newExpectedAmount
-      });
-    }
+    const { error } = await supabase
+      .from('payments')
+      .update({ expected_amount: newExpectedAmount })
+      .eq('round_id', roundId);
+    if (error) throw error;
   }
 
   async getOverallFinancials(chitId: number): Promise<{ total_expected: number, total_paid: number }> {
-    const roundIds = new Set(
-      LocalDatabase.getTable<MonthlyRound>('monthly_rounds')
-        .filter(r => r.chit_id === chitId)
-        .map(r => r.id)
-    );
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+      
+    if (roundsError) throw roundsError;
+    if (!rounds || rounds.length === 0) return { total_expected: 0, total_paid: 0 };
+    
+    const roundIds = rounds.map((r: any) => r.id);
 
-    if (roundIds.size === 0) return { total_expected: 0, total_paid: 0 };
+    const { data: payments, error: paymentsError } = await supabase
+      .from('payments')
+      .select('round_id, member_id, expected_amount, paid_amount')
+      .in('round_id', roundIds);
+      
+    if (paymentsError) throw paymentsError;
 
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => roundIds.has(p.round_id));
+    const seenKeys = new Set<string>();
+    const validPayments = (payments || []).filter((p: any) => {
+      const key = `${p.round_id}_${p.member_id}`;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
 
     let total_expected = 0, total_paid = 0;
-    payments.forEach(p => {
+    validPayments.forEach((p: any) => {
       total_expected += p.expected_amount || 0;
       total_paid += p.paid_amount || 0;
     });
@@ -123,27 +182,48 @@ export class PaymentRepository {
   }
 
   async getOutstandingDuesByMember(chitId: number): Promise<{ member_id: number, member_name: string, total_due: number, total_overpaid: number, net_due: number }[]> {
-    const roundIds = new Set(
-      LocalDatabase.getTable<MonthlyRound>('monthly_rounds')
-        .filter(r => r.chit_id === chitId)
-        .map(r => r.id)
-    );
-
-    if (roundIds.size === 0) return [];
-
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => roundIds.has(p.round_id));
-
-    const duesMap = new Map<number, { member_id: number, member_name: string, total_due: number, total_overpaid: number, net_due: number }>();
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+      
+    if (roundsError) throw roundsError;
+    if (!rounds || rounds.length === 0) return [];
     
-    payments.forEach(p => {
+    const roundIds = rounds.map((r: any) => r.id);
+
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+      .select(`
+        round_id, 
+        member_id, 
+        expected_amount, 
+        paid_amount,
+        members!inner (
+          name
+        )
+      `)
+      .in('round_id', roundIds);
+      
+    if (paymentsError) throw paymentsError;
+
+    const seenKeys = new Set<string>();
+    const validPayments = (paymentsData || []).filter((p: any) => {
+      const key = `${p.round_id}_${p.member_id}`;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+
+    const duesMap = new Map<number, any>();
+    
+    validPayments.forEach((p: any) => {
       const balance = (p.expected_amount || 0) - (p.paid_amount || 0);
       
       if (!duesMap.has(p.member_id)) {
-        const member = LocalDatabase.getById<Member>('members', p.member_id);
         duesMap.set(p.member_id, {
           member_id: p.member_id,
-          member_name: member?.name || 'Unknown',
+          member_name: p.members.name || 'Unknown',
           total_due: 0,
           total_overpaid: 0,
           net_due: 0
@@ -166,22 +246,24 @@ export class PaymentRepository {
   }
 
   async addTransaction(paymentId: number, amount: number, notes?: string, paymentDate?: string): Promise<void> {
-    const payment = LocalDatabase.getById<Payment>('payments', paymentId);
-    if (!payment) return;
-
-    await LocalDatabase.insert<PaymentTransaction>('payment_transactions', {
+    const { error } = await supabase.from('payment_transactions').insert({
       payment_id: paymentId,
       amount,
       notes: notes || '',
       payment_date: paymentDate || new Date().toISOString()
     });
+    if (error) throw error;
   }
 
   async getTransactionsByPayment(paymentId: number): Promise<any[]> {
-    const txs = LocalDatabase.getTable<PaymentTransaction>('payment_transactions')
-      .filter(t => t.payment_id === paymentId);
-
-    return txs.sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
+    const { data, error } = await supabase
+      .from('payment_transactions')
+      .select('*')
+      .eq('payment_id', paymentId)
+      .order('payment_date', { ascending: false });
+      
+    if (error) throw error;
+    return data || [];
   }
 
   async updateTransaction(id: number, data: { amount: number, notes?: string, payment_date?: string }): Promise<void> {
@@ -192,49 +274,62 @@ export class PaymentRepository {
     if (data.payment_date) {
       updateData.payment_date = data.payment_date;
     }
-    await LocalDatabase.update<PaymentTransaction>('payment_transactions', id, updateData);
+    const { error } = await supabase.from('payment_transactions').update(updateData).eq('id', id);
+    if (error) throw error;
   }
 
   async deleteTransaction(id: number): Promise<void> {
-    await LocalDatabase.delete('payment_transactions', id);
+    const { error } = await supabase.from('payment_transactions').delete().eq('id', id);
+    if (error) throw error;
   }
 
   async getOverpaidMembers(roundId: number): Promise<{ payment_id: number, member_id: number, member_name: string, paid_amount: number, expected_amount: number, refund_amount: number, status: string }[]> {
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => p.round_id === roundId);
+    const { data: paymentsData, error } = await supabase
+      .from('payments')
+      .select(`
+        *,
+        members!inner (
+          name
+        )
+      `)
+      .eq('round_id', roundId);
+      
+    if (error) throw error;
 
-    const overpaid = payments
-      .filter(p => (p.paid_amount || 0) > (p.expected_amount || 0))
-      .map(p => {
-        const member = LocalDatabase.getById<Member>('members', p.member_id);
-        return {
-          payment_id: p.id,
-          member_id: p.member_id,
-          member_name: member?.name || 'Unknown',
-          paid_amount: p.paid_amount || 0,
-          expected_amount: p.expected_amount || 0,
-          refund_amount: (p.paid_amount || 0) - (p.expected_amount || 0),
-          status: p.status
-        };
-      });
+    const overpaid = (paymentsData || [])
+      .filter((p: any) => (p.paid_amount || 0) > (p.expected_amount || 0))
+      .map((p: any) => ({
+        payment_id: p.id,
+        member_id: p.member_id,
+        member_name: p.members?.name || 'Unknown',
+        paid_amount: p.paid_amount || 0,
+        expected_amount: p.expected_amount || 0,
+        refund_amount: (p.paid_amount || 0) - (p.expected_amount || 0),
+        status: p.status
+      }));
 
-    return overpaid.sort((a, b) => b.refund_amount - a.refund_amount);
+    return overpaid.sort((a: any, b: any) => b.refund_amount - a.refund_amount);
   }
 
   async markAsRefunded(paymentId: number): Promise<void> {
-    await LocalDatabase.update<Payment>('payments', paymentId, { status: 'refunded' });
+    const { error } = await supabase.from('payments').update({ status: 'refunded', updated_at: new Date().toISOString() }).eq('id', paymentId);
+    if (error) throw error;
   }
 
   async markOverpaidMembers(roundId: number): Promise<void> {
-    const payments = LocalDatabase.getTable<Payment>('payments')
-      .filter(p => p.round_id === roundId);
-
-    const toUpdate = payments.filter(p => 
+    const { data: payments, error } = await supabase
+      .from('payments')
+      .select('id, paid_amount, expected_amount, status')
+      .eq('round_id', roundId);
+      
+    if (error) throw error;
+    
+    const toUpdate = (payments || []).filter((p: any) => 
       (p.paid_amount || 0) > (p.expected_amount || 0) && p.status !== 'refunded'
     );
 
     for (const payment of toUpdate) {
-      await LocalDatabase.update<Payment>('payments', payment.id, { status: 'overpaid' });
+      await supabase.from('payments').update({ status: 'overpaid' }).eq('id', payment.id);
     }
   }
 }

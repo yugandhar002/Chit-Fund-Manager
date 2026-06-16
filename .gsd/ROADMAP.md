@@ -77,9 +77,9 @@
 **Objective**: Enable managing multiple chit funds simultaneously. (Reverted in favor of single-chit focus).
 
 ### Phase 8: Recently Interacted Sorting in Payments
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Sort the member payments list by the most recently interacted/recorded transactions so that recently active entries appear at the top.
 **Deliverables**:
-- [ ] Explicitly update `updated_at` in `PaymentRepository` when adding, editing, or deleting payment transactions.
-- [ ] Sort payments returned by `getPaymentsByRound` by `updated_at` descending.
+- [x] Explicitly update `updated_at` in `PaymentRepository` when adding, editing, or deleting payment transactions.
+- [x] Sort payments returned by `getPaymentsByRound` by `updated_at` descending.
 
