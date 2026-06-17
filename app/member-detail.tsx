@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, Text, Alert, Switch, TouchableOpacity } from 'react-native';
+import { StyleSheet, ScrollView, View, Text, Alert, Switch, TouchableOpacity, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
@@ -10,6 +11,7 @@ import { MemberRepository, PaymentRepository, Member, Payment } from '../src/dat
 export default function MemberDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const queryClient = useQueryClient();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,6 +68,7 @@ export default function MemberDetailScreen() {
         address: address.trim(), 
         is_organizer: isOrganizer ? 1 : 0 
       });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       router.back();
     } catch (e) {
       console.error('Failed to update member:', e);
@@ -80,6 +83,7 @@ export default function MemberDetailScreen() {
     try {
       const repo = new MemberRepository();
       await repo.deleteMember(member.id);
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       router.back();
     } catch (e) {
       console.error('Failed to delete member:', e);
@@ -113,7 +117,12 @@ export default function MemberDetailScreen() {
 
         {!isEditing ? (
           <View style={styles.detailsContainer}>
-            <DetailItem icon="call-outline" label="Phone" value={member.phone || 'Not provided'} />
+            <DetailItem 
+              icon="call-outline" 
+              label="Phone" 
+              value={member.phone || 'Not provided'} 
+              onPress={member.phone ? () => Linking.openURL(`tel:${member.phone}`) : undefined}
+            />
             <DetailItem icon="location-outline" label="Address" value={member.address || 'Not provided'} />
             <DetailItem icon="calendar-outline" label="Joined" value={new Date(member.created_at).toLocaleDateString()} />
             
@@ -176,16 +185,30 @@ export default function MemberDetailScreen() {
   );
 }
 
-function DetailItem({ icon, label, value }: { icon: any, label: string, value: string }) {
-  return (
-    <View style={styles.detailItem}>
+function DetailItem({ icon, label, value, onPress }: { icon: any, label: string, value: string, onPress?: () => void }) {
+  const content = (
+    <>
       <View style={styles.iconBox}>
-        <Ionicons name={icon} size={20} color={Colors.textSecondary} />
+        <Ionicons name={icon} size={20} color={onPress ? Colors.secondary : Colors.textSecondary} />
       </View>
       <View>
         <Text style={styles.itemLabel}>{label}</Text>
-        <Text style={styles.itemValue}>{value}</Text>
+        <Text style={[styles.itemValue, onPress ? styles.clickableValue : null]}>{value}</Text>
       </View>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.detailItem} onPress={onPress} activeOpacity={0.7}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View style={styles.detailItem}>
+      {content}
     </View>
   );
 }
@@ -251,6 +274,10 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 16,
     fontWeight: '500',
+  },
+  clickableValue: {
+    color: Colors.secondary,
+    textDecorationLine: 'underline',
   },
   editForm: {
     marginTop: Theme.spacing.md,

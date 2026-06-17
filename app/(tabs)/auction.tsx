@@ -1,14 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Badge, Button, Card, EmptyState } from '../../src/components/ui';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
-import { EmptyState, Card, Button, Badge, StatCard } from '../../src/components/ui';
-import { RoundRepository, AuctionRepository, ChitRepository, PaymentRepository, MonthlyRound, Auction, Chit } from '../../src/database';
+import { Auction, AuctionRepository, Chit, ChitRepository, MonthlyRound, RoundRepository } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
-import { SyncEngine } from '../../src/services/syncEngine';
-import { Alert } from 'react-native';
 
 interface OverpaidMember {
   payment_id: number;
@@ -36,18 +34,18 @@ export default function AuctionScreen() {
       const roundRepo = new RoundRepository();
       const auctionRepo = new AuctionRepository();
       const service = new ChitService();
-      
+
       const chit = await chitRepo.getActiveChit();
       setActiveChit(chit);
-      
+
       if (chit) {
         // Find the current pending round or the latest completed one
         const allRounds = await roundRepo.getRoundsByChit(chit.id);
         const pending = allRounds.find(r => r.status === 'pending');
         const latest = pending || allRounds[allRounds.length - 1];
-        
+
         setCurrentRound(latest || null);
-        
+
         if (latest) {
           const [auctionList, historyList] = await Promise.all([
             auctionRepo.getAuctionsByRound(latest.id),
@@ -74,25 +72,7 @@ export default function AuctionScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // First load local data immediately
       loadData();
-
-      // Silently sync with cloud on screen focus
-      SyncEngine.syncAll()
-        .then(() => {
-          loadData();
-        })
-        .catch(err => console.error('Auction screen sync error:', err));
-
-      // Subscribe to any database update events (from polling/realtime)
-      const unsubscribe = SyncEngine.subscribe(() => {
-        console.log('AuctionScreen: Sync update received, reloading...');
-        loadData();
-      });
-
-      return () => {
-        unsubscribe();
-      };
     }, [loadData])
   );
 
@@ -139,7 +119,7 @@ export default function AuctionScreen() {
   if (!activeChit) {
     return (
       <View style={styles.container}>
-        <EmptyState 
+        <EmptyState
           icon="business-outline"
           title="No Active Chit"
           message="Create a chit fund and add members to start auctions."
@@ -153,7 +133,7 @@ export default function AuctionScreen() {
   if (!currentRound) {
     return (
       <View style={styles.container}>
-        <EmptyState 
+        <EmptyState
           icon="hammer-outline"
           title="Fund Not Started"
           message="You haven't started the monthly cycle yet. Go to Dashboard to start Month 1."
@@ -170,17 +150,17 @@ export default function AuctionScreen() {
   const isCompleted = currentRound.status === 'completed';
 
   return (
-    <ScrollView 
-      style={styles.container} 
+    <ScrollView
+      style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} tintColor={Colors.secondary} />}
     >
       {/* Month Status Header */}
       <View style={styles.roundHeader}>
         <Text style={styles.roundTitle}>Month {currentRound.month_number}</Text>
-        <Badge 
-          label={isActive ? (isMonth1 ? 'Organizer Month' : 'Collecting Payments') : 'Completed'} 
-          variant={isActive ? 'info' : 'success'} 
+        <Badge
+          label={isActive ? (isMonth1 ? 'Organizer Month' : 'Collecting Payments') : 'Completed'}
+          variant={isActive ? 'info' : 'success'}
         />
       </View>
 
@@ -193,12 +173,12 @@ export default function AuctionScreen() {
               <Ionicons name="person-circle-outline" size={48} color={Colors.secondary} style={{ marginBottom: 12 }} />
               <Text style={styles.hintTitle}>Organizer's Month</Text>
               <Text style={styles.hintText}>
-                This is Month 1 — all ₹{((activeChit.monthly_contribution / 100) * activeChit.member_count).toLocaleString()} goes to the organizer. 
+                This is Month 1 — all ₹{((activeChit.monthly_contribution / 100) * activeChit.member_count).toLocaleString()} goes to the organizer.
                 Collect payments from all members, then conclude when done.
               </Text>
-              <Button 
-                title="Conclude Month 1" 
-                onPress={handleConcludeMonth} 
+              <Button
+                title="Conclude Month 1"
+                onPress={handleConcludeMonth}
                 variant="success"
                 loading={processing}
                 style={styles.recordButton}
@@ -212,11 +192,11 @@ export default function AuctionScreen() {
               <Ionicons name="hammer-outline" size={48} color={Colors.secondary} style={{ marginBottom: 12 }} />
               <Text style={styles.hintTitle}>Record End-of-Month Auction</Text>
               <Text style={styles.hintText}>
-                After collecting payments throughout the month, record the auction result here. 
+                After collecting payments throughout the month, record the auction result here.
                 This will recalculate each member's expected payment for this month based on the dividend.
               </Text>
-              <Button 
-                title="Record Auction Result" 
+              <Button
+                title="Record Auction Result"
                 onPress={() => router.push({ pathname: '/record-auction', params: { roundId: currentRound.id } })}
                 style={styles.recordButton}
               />
@@ -262,8 +242,8 @@ export default function AuctionScreen() {
                 <View style={styles.overpaidSection}>
                   <Text style={styles.sectionTitle}>⚠️ Overpaid Members — Refund Required</Text>
                   {overpaidMembers.map((member) => (
-                    <Card 
-                      key={member.payment_id} 
+                    <Card
+                      key={member.payment_id}
                       style={[
                         styles.overpaidCard,
                         member.status === 'refunded' ? styles.refundedCard : null
@@ -288,7 +268,7 @@ export default function AuctionScreen() {
                         </View>
                       </View>
                       {member.status !== 'refunded' && (
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.refundButton}
                           onPress={() => handleMarkRefunded(member.payment_id, member.member_name)}
                         >
@@ -302,9 +282,9 @@ export default function AuctionScreen() {
               )}
 
               {/* Conclude Month Button */}
-              <Button 
-                title="Conclude Month" 
-                onPress={handleConcludeMonth} 
+              <Button
+                title="Conclude Month"
+                onPress={handleConcludeMonth}
                 variant="success"
                 loading={processing}
                 style={styles.concludeButton}
@@ -320,9 +300,9 @@ export default function AuctionScreen() {
           <Ionicons name="checkmark-circle" size={40} color={Colors.success} style={{ alignSelf: 'center', marginBottom: 12 }} />
           <Text style={styles.nextStepTitle}>Month {currentRound.month_number} Complete!</Text>
           <Text style={styles.hintText}>You can now start the next month's cycle. Payments will be created at full ₹{(activeChit.monthly_contribution / 100).toLocaleString()} per member.</Text>
-          <Button 
-            title={`Start Month ${currentRound.month_number + 1}`} 
-            onPress={handleStartNextMonth} 
+          <Button
+            title={`Start Month ${currentRound.month_number + 1}`}
+            onPress={handleStartNextMonth}
             loading={processing}
             style={styles.recordButton}
           />

@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, ScrollView, View, Text, Alert, Modal, TouchableOpacity, FlatList } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Alert, FlatList, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Button, Card, TextField } from '../src/components/ui';
 import { Colors } from '../src/constants/colors';
 import { Theme } from '../src/constants/theme';
-import { Button, TextField, Card } from '../src/components/ui';
-import { AuctionRepository, MemberRepository, RoundRepository, ChitRepository, Member, Chit, MonthlyRound } from '../src/database';
+import { Chit, ChitRepository, Member, MemberRepository, MonthlyRound, RoundRepository } from '../src/database';
 import { ChitService } from '../src/services/chitService';
 
 export default function RecordAuctionScreen() {
   const router = useRouter();
   const { roundId, auctionNumber } = useLocalSearchParams<{ roundId: string, auctionNumber: string }>();
-  
+  const queryClient = useQueryClient();
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
@@ -30,14 +32,14 @@ export default function RecordAuctionScreen() {
         const roundRepo = new RoundRepository();
         const chitRepo = new ChitRepository();
         const memberRepo = new MemberRepository();
-        
+
         const chit = await chitRepo.getActiveChit();
         if (chit) {
           setActiveChit(chit);
           const rounds = await roundRepo.getRoundsByChit(chit.id);
           const current = rounds.find(r => r.id === parseInt(roundId));
           setRound(current || null);
-          
+
           if (current) {
             const members = await memberRepo.getAvailableBidders(chit.id);
             setAvailableMembers(members);
@@ -60,6 +62,44 @@ export default function RecordAuctionScreen() {
   const dividendPaisa = Math.floor(commissionPaisa / memberCount);
   const effectiveContribution = (activeChit?.monthly_contribution || 0) - dividendPaisa;
 
+  const sendWhatsAppMessage = () => {
+    if (!selectedWinner || !activeChit || !round || !selectedWinner.phone) return;
+
+    const winnerName = selectedWinner.name;
+    const chitName = activeChit.name;
+    const monthNum = round.month_number;
+    const auctionNum = auctionNumber || '1';
+    const chitValStr = (totalValue / 100).toLocaleString();
+    const commStr = (commissionPaisa / 100).toLocaleString();
+    const payoutStr = (payoutPaisa / 100).toLocaleString();
+
+    const message = `*${chitName} — Auction Receipt* \n` +
+      `-----------------------------------------\n` +
+      `Hello *${winnerName}*! \n` +
+      `Congratulations on winning the auction! 🎉\n\n` +
+      `Here are your auction details:\n` +
+      `• *Auction Number:* ${auctionNum}\n` +
+      `• *Total Chit Value:* ₹${chitValStr}\n` +
+      `• *Bid Amount:* ₹${commStr}\n` +
+      `• *Net Payout Amount:* *₹${payoutStr}*\n\n` +
+      `The net amount of *₹${payoutStr}* will be disbursed to you shortly.\n\n` +
+      `Thank you! Best regards. 🙏\n` +
+      `-----------------------------------------`;
+
+    let formattedPhone = selectedWinner.phone.trim();
+    // Strip any non-numeric characters like spaces, dashes, or parentheses
+    formattedPhone = formattedPhone.replace(/\D/g, '');
+    if (formattedPhone.length === 10) {
+      formattedPhone = '91' + formattedPhone;
+    }
+
+    const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+    Linking.openURL(url).catch((err) => {
+      console.error('Failed to open WhatsApp:', err);
+      Alert.alert('Error', 'Could not open WhatsApp. Please check if the app is installed.');
+    });
+  };
+
   const handleRecord = async () => {
     if (!selectedWinner) {
       return;
@@ -71,7 +111,7 @@ export default function RecordAuctionScreen() {
     setSaving(true);
     try {
       const service = new ChitService();
-      
+
       // Use the new method that records auction AND recalculates same-month payments
       await service.recordAuctionAndRecalculate(activeChit!.id, {
         round_id: parseInt(roundId!),
@@ -83,9 +123,37 @@ export default function RecordAuctionScreen() {
         auction_number: parseInt(auctionNumber || '1'),
       });
 
-      router.back();
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
+      if (selectedWinner.phone) {
+        Alert.alert(
+          'Auction Recorded',
+          'Auction recorded successfully. Would you like to send the details to the winner on WhatsApp?',
+          [
+            {
+              text: 'Cancel',
+              onPress: () => router.back(),
+              style: 'cancel',
+            },
+            {
+              text: 'Send on WhatsApp',
+              onPress: () => {
+                sendWhatsAppMessage();
+                router.back();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Auction Recorded',
+          'Auction recorded successfully.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
     } catch (e) {
       console.error('Failed to record auction:', e);
+      Alert.alert('Error', 'Failed to record auction.');
     } finally {
       setSaving(false);
     }
@@ -97,10 +165,10 @@ export default function RecordAuctionScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card style={styles.formCard}>
         <Text style={styles.infoLabel}>Month {round?.month_number} Auction {auctionNumber && auctionNumber !== '1' ? `#${auctionNumber}` : ''}</Text>
-        
+
         <Text style={styles.label}>Select Winner</Text>
-        <TouchableOpacity 
-          style={styles.pickerTrigger} 
+        <TouchableOpacity
+          style={styles.pickerTrigger}
           onPress={() => setShowMemberPicker(true)}
         >
           <Text style={[styles.pickerValue, !selectedWinner && styles.placeholder]}>
@@ -169,7 +237,7 @@ export default function RecordAuctionScreen() {
               keyExtractor={(item) => item.id.toString()}
               contentContainerStyle={styles.memberList}
               renderItem={({ item }) => (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.memberItem}
                   onPress={() => {
                     setSelectedWinner(item);

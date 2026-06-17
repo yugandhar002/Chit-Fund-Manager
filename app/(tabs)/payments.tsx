@@ -7,8 +7,6 @@ import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Badge, StatCard } from '../../src/components/ui';
 import { PaymentRepository, RoundRepository, ChitRepository, AuctionRepository, Payment, MonthlyRound, Chit, Auction } from '../../src/database';
-import { ChitService } from '../../src/services/chitService';
-import { SyncEngine } from '../../src/services/syncEngine';
 
 export default function PaymentsScreen() {
   const router = useRouter();
@@ -41,10 +39,6 @@ export default function PaymentsScreen() {
       const chit = await chitRepo.getActiveChit();
       if (chit) {
         setActiveChit(chit);
-        
-        // Auto-heal any missing payments for members (e.g. if member was added after starting chit)
-        const chitService = new ChitService();
-        chitService.healMissingPayments(chit.id).catch(err => console.error("Auto-heal payments failed:", err));
 
         const rounds = await roundRepo.getRoundsByChit(chit.id);
         setAllRounds(rounds);
@@ -87,28 +81,8 @@ export default function PaymentsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // First load local data immediately
       loadData();
       loadRoundData();
-
-      // Silently sync with cloud on screen focus
-      SyncEngine.syncAll()
-        .then(() => {
-          loadData();
-          loadRoundData();
-        })
-        .catch(err => console.error('Payments screen sync error:', err));
-
-      // Subscribe to any database update events (from polling/realtime)
-      const unsubscribe = SyncEngine.subscribe(() => {
-        console.log('PaymentsScreen: Sync update received, reloading...');
-        loadData();
-        loadRoundData();
-      });
-
-      return () => {
-        unsubscribe();
-      };
     }, [loadData, loadRoundData])
   );
 

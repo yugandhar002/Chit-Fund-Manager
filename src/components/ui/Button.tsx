@@ -18,6 +18,7 @@ interface ButtonProps {
   loading?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  icon?: React.ReactNode;
 }
 
 export const Button: React.FC<ButtonProps> = ({ 
@@ -27,7 +28,8 @@ export const Button: React.FC<ButtonProps> = ({
   disabled, 
   loading,
   style,
-  textStyle
+  textStyle,
+  icon
 }) => {
   const getButtonStyle = () => {
     switch (variant) {
@@ -54,13 +56,16 @@ export const Button: React.FC<ButtonProps> = ({
       {loading ? (
         <ActivityIndicator color={variant === 'ghost' ? Colors.secondary : Colors.textPrimary} />
       ) : (
-        <Text style={[
-          styles.text, 
-          variant === 'ghost' && styles.ghostText,
-          textStyle
-        ]}>
-          {title}
-        </Text>
+        <>
+          {icon}
+          <Text style={[
+            styles.text, 
+            variant === 'ghost' && styles.ghostText,
+            textStyle
+          ]}>
+            {title}
+          </Text>
+        </>
       )}
     </TouchableOpacity>
   );

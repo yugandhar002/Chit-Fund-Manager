@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, ScrollView, View, Text, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { Colors } from '../src/constants/colors';
@@ -10,6 +11,7 @@ import { ChitRepository } from '../src/database';
 
 export default function CreateChitScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
 
   // Form State
@@ -48,6 +50,7 @@ export default function CreateChitScreen() {
         status: 'active',
       });
 
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       router.replace('/');
     } catch (e) {
       console.error('Failed to create chit:', e);

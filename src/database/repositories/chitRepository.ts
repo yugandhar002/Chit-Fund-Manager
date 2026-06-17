@@ -1,18 +1,26 @@
-import { LocalDatabase } from '../localDb';
+import { supabase } from '../supabase';
 import { Chit } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export class ChitRepository {
   async createChit(data: Omit<Chit, 'id' | 'created_at'>): Promise<number> {
-    const result = await LocalDatabase.insert<Chit>('chits', data);
+    const { data: result, error } = await supabase
+      .from('chits')
+      .insert(data)
+      .select('id')
+      .single();
+    if (error) throw error;
     return result.id;
   }
 
   async getAllActiveChits(): Promise<Chit[]> {
-    const rows = LocalDatabase.getTable<Chit>('chits');
-    return rows
-      .filter(r => r.status === 'active')
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const { data, error } = await supabase
+      .from('chits')
+      .select('*')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
   }
 
   async getActiveChit(): Promise<Chit | null> {
@@ -20,20 +28,22 @@ export class ChitRepository {
       const selectedIdStr = await AsyncStorage.getItem('selectedChitId');
       
       if (selectedIdStr) {
-        const chit = LocalDatabase.getById<Chit>('chits', parseInt(selectedIdStr));
-        if (chit) return chit;
+        const { data, error } = await supabase
+          .from('chits')
+          .select('*')
+          .eq('id', parseInt(selectedIdStr))
+          .single();
+        if (!error && data) return data;
       }
     } catch (e) {
       console.log('AsyncStorage error:', e);
     }
 
     // Default: return most recent active chit
-    const active = LocalDatabase.getTable<Chit>('chits')
-      .filter(r => r.status === 'active')
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const activeChits = await this.getAllActiveChits();
 
-    if (active.length > 0) {
-      const first = active[0];
+    if (activeChits.length > 0) {
+      const first = activeChits[0];
       await AsyncStorage.setItem('selectedChitId', first.id.toString());
       return first;
     }
@@ -42,11 +52,19 @@ export class ChitRepository {
   }
 
   async updateChitStatus(id: number, status: 'active' | 'completed'): Promise<void> {
-    await LocalDatabase.update<Chit>('chits', id, { status });
+    const { error } = await supabase
+      .from('chits')
+      .update({ status })
+      .eq('id', id);
+    if (error) throw error;
   }
 
   async deleteChit(id: number): Promise<void> {
-    await LocalDatabase.delete('chits', id);
+    const { error } = await supabase
+      .from('chits')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
     
     // Clear the selected id from AsyncStorage if we're deleting the current one
     try {
@@ -60,6 +78,12 @@ export class ChitRepository {
   }
 
   async getChitById(id: number): Promise<Chit | null> {
-    return LocalDatabase.getById<Chit>('chits', id);
+    const { data, error } = await supabase
+      .from('chits')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
   }
 }

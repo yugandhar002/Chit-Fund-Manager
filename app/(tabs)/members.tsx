@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, FlatList, Text, TouchableOpacity, TextInput } from 'react-native';
+import { StyleSheet, View, FlatList, Text, TouchableOpacity, TextInput, Linking } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/colors';
 import { Theme } from '../../src/constants/theme';
 import { EmptyState, Card, Button, Badge } from '../../src/components/ui';
 import { MemberRepository, ChitRepository, Member, Chit } from '../../src/database';
-import { SyncEngine } from '../../src/services/syncEngine';
 
 export default function MembersScreen() {
   const router = useRouter();
@@ -41,25 +40,7 @@ export default function MembersScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // First load local data immediately
       loadData();
-
-      // Silently sync with cloud on screen focus
-      SyncEngine.syncAll()
-        .then(() => {
-          loadData();
-        })
-        .catch(err => console.error('Members screen sync error:', err));
-
-      // Subscribe to any database update events (from polling/realtime)
-      const unsubscribe = SyncEngine.subscribe(() => {
-        console.log('MembersScreen: Sync update received, reloading...');
-        loadData();
-      });
-
-      return () => {
-        unsubscribe();
-      };
     }, [loadData])
   );
 
@@ -77,8 +58,25 @@ export default function MembersScreen() {
           {item.phone && <Text style={styles.memberPhone}>{item.phone}</Text>}
         </View>
       </View>
-      <View style={styles.memberStatus}>
-        {item.is_organizer === 1 && <Badge label="Organizer" variant="info" />}
+      <View style={styles.rightContainer}>
+        {item.phone && (
+          <TouchableOpacity
+            style={styles.callButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              if (item.phone) {
+                Linking.openURL(`tel:${item.phone}`);
+              }
+            }}
+          >
+            <Ionicons name="call" size={18} color={Colors.secondary} />
+          </TouchableOpacity>
+        )}
+        {item.is_organizer === 1 && (
+          <View style={styles.memberStatus}>
+            <Badge label="Organizer" variant="info" />
+          </View>
+        )}
       </View>
     </Card>
   );
@@ -110,6 +108,7 @@ export default function MembersScreen() {
           onPress={() => router.push('/add-member')}
           style={styles.addButton}
           variant="secondary"
+          disabled={members.length >= activeChit.member_count}
         />
       </View>
 
@@ -229,6 +228,18 @@ const styles = StyleSheet.create({
   },
   memberStatus: {
     marginLeft: Theme.spacing.sm,
+  },
+  rightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Theme.spacing.sm,
+  },
+  callButton: {
+    padding: Theme.spacing.sm,
+    borderRadius: Theme.borderRadius.round,
+    backgroundColor: Colors.secondary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchContainer: {
     paddingHorizontal: Theme.spacing.lg,

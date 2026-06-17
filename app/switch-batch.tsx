@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Stack, router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../src/constants/colors';
@@ -9,6 +10,7 @@ import { ChitRepository } from '../src/database';
 import { Chit } from '../src/database/types';
 
 export default function SwitchBatchScreen() {
+  const queryClient = useQueryClient();
   const [chits, setChits] = useState<Chit[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -40,6 +42,7 @@ export default function SwitchBatchScreen() {
     try {
       await AsyncStorage.setItem('selectedChitId', id.toString());
       setSelectedId(id);
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       router.back();
     } catch (e) {
       console.log('Error saving selected chit', e);
@@ -70,6 +73,7 @@ export default function SwitchBatchScreen() {
                     try {
                       const repo = new ChitRepository();
                       await repo.deleteChit(id);
+                      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
                       loadData();
                     } catch (e: any) {
                       console.error('Failed to delete chit fund:', e.message);

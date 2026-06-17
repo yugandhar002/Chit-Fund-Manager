@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, ScrollView, View, Text, Alert, TouchableOpacity, Platform, KeyboardAvoidingView } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -14,6 +15,7 @@ export default function RecordPaymentScreen() {
   const router = useRouter();
   const { paymentId } = useLocalSearchParams<{ paymentId: string }>();
   const scrollViewRef = useRef<ScrollView>(null);
+  const queryClient = useQueryClient();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,6 +98,7 @@ export default function RecordPaymentScreen() {
       
       // Reload current payment stats and transaction list
       await loadData();
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (e: any) {
       console.error('Failed to record payment:', e.message);
       Alert.alert('Error', 'Failed to record payment transaction.');
@@ -137,6 +140,7 @@ export default function RecordPaymentScreen() {
       await service.updatePaymentTransaction(payment.id, txId, editedAmountPaisa, editNotes, editDate.toISOString());
       setEditingTxId(null);
       await loadData();
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (e: any) {
       console.error('Failed to update transaction:', e.message);
       Alert.alert('Error', 'Failed to update transaction.');
@@ -158,6 +162,7 @@ export default function RecordPaymentScreen() {
               const service = new ChitService();
               await service.deletePaymentTransaction(payment.id, txId);
               await loadData();
+              queryClient.invalidateQueries({ queryKey: ['dashboard'] });
             } catch (e: any) {
               console.error('Failed to delete transaction:', e.message);
               Alert.alert('Error', 'Failed to delete transaction.');

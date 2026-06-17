@@ -1,43 +1,61 @@
-import { LocalDatabase } from '../localDb';
-import { Auction, MonthlyRound, Member } from '../types';
+import { supabase } from '../supabase';
+import { Auction } from '../types';
 
 export class AuctionRepository {
   async recordAuction(data: Omit<Auction, 'id' | 'created_at'>): Promise<number> {
-    const result = await LocalDatabase.insert<Auction>('auctions', data);
+    const { data: result, error } = await supabase
+      .from('auctions')
+      .insert(data)
+      .select('id')
+      .single();
+    if (error) throw error;
     return result.id;
   }
 
   async getAuctionsByRound(roundId: number): Promise<Auction[]> {
-    const rows = LocalDatabase.getTable<Auction>('auctions');
-    return rows.filter(a => a.round_id === roundId);
+    const { data, error } = await supabase
+      .from('auctions')
+      .select('*')
+      .eq('round_id', roundId);
+    if (error) throw error;
+    return data || [];
   }
 
   async getAuctionHistory(chitId: number): Promise<(Auction & { winner_name: string, month_number: number })[]> {
-    // 1. Get rounds map for this chit
-    const rounds = LocalDatabase.getTable<MonthlyRound>('monthly_rounds')
-      .filter(r => r.chit_id === chitId);
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id, month_number')
+      .eq('chit_id', chitId);
+    if (roundsError) throw roundsError;
     
-    if (rounds.length === 0) return [];
+    if (!rounds || rounds.length === 0) return [];
     
-    const roundIds = new Set(rounds.map(r => r.id));
-    const roundMap = new Map(rounds.map(r => [r.id, r.month_number]));
+    const roundIds = rounds.map((r: any) => r.id);
+    const roundMap = new Map(rounds.map((r: any) => [r.id, r.month_number]));
 
-    // 2. Get auctions for these rounds
-    const auctions = LocalDatabase.getTable<Auction>('auctions')
-      .filter(a => roundIds.has(a.round_id));
+    const { data: auctionsData, error: auctionsError } = await supabase
+      .from('auctions')
+      .select(`
+        *,
+        members (
+          name,
+          phone
+        )
+      `)
+      .in('round_id', roundIds);
+      
+    if (auctionsError) throw auctionsError;
+    
+    const auctions = auctionsData || [];
 
-    // 3. Map auction with winner name and month number
-    const history = auctions.map(a => {
-      const member = LocalDatabase.getById<Member>('members', a.winner_member_id);
-      return {
-        ...a,
-        winner_name: member?.name || 'Unknown',
-        month_number: roundMap.get(a.round_id) || 0
-      };
-    });
+    const history = auctions.map((a: any) => ({
+      ...a,
+      winner_name: a.members?.name || 'Unknown',
+      winner_phone: a.members?.phone || '',
+      month_number: roundMap.get(a.round_id) || 0
+    }));
 
-    // 4. Sort by month_number then auction_number
-    return history.sort((a, b) => {
+    return history.sort((a: any, b: any) => {
       if (a.month_number === b.month_number) {
         return a.auction_number - b.auction_number;
       }
@@ -46,34 +64,42 @@ export class AuctionRepository {
   }
 
   async getCumulativeCommission(chitId: number): Promise<number> {
-    const roundIds = new Set(
-      LocalDatabase.getTable<MonthlyRound>('monthly_rounds')
-        .filter(r => r.chit_id === chitId)
-        .map(r => r.id)
-    );
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+    if (roundsError) throw roundsError;
 
-    if (roundIds.size === 0) return 0;
+    if (!rounds || rounds.length === 0) return 0;
+    const roundIds = rounds.map((r: any) => r.id);
 
-    const auctions = LocalDatabase.getTable<Auction>('auctions')
-      .filter(a => roundIds.has(a.round_id));
+    const { data: auctions, error: auctionsError } = await supabase
+      .from('auctions')
+      .select('commission_amount')
+      .in('round_id', roundIds);
+    if (auctionsError) throw auctionsError;
 
-    return auctions.reduce((sum, a) => sum + (a.commission_amount || 0), 0);
+    return (auctions || []).reduce((sum: number, a: any) => sum + (a.commission_amount || 0), 0);
   }
 
   async getWinners(chitId: number): Promise<number[]> {
-    const roundIds = new Set(
-      LocalDatabase.getTable<MonthlyRound>('monthly_rounds')
-        .filter(r => r.chit_id === chitId)
-        .map(r => r.id)
-    );
+    const { data: rounds, error: roundsError } = await supabase
+      .from('monthly_rounds')
+      .select('id')
+      .eq('chit_id', chitId);
+    if (roundsError) throw roundsError;
 
-    if (roundIds.size === 0) return [];
+    if (!rounds || rounds.length === 0) return [];
+    const roundIds = rounds.map((r: any) => r.id);
 
-    const auctions = LocalDatabase.getTable<Auction>('auctions')
-      .filter(a => roundIds.has(a.round_id));
+    const { data: auctions, error: auctionsError } = await supabase
+      .from('auctions')
+      .select('winner_member_id')
+      .in('round_id', roundIds);
+    if (auctionsError) throw auctionsError;
 
     const winners = new Set<number>();
-    auctions.forEach(a => winners.add(a.winner_member_id));
+    (auctions || []).forEach((a: any) => winners.add(a.winner_member_id));
     return Array.from(winners);
   }
 }
