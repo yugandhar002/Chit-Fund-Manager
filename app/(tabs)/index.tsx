@@ -44,10 +44,11 @@ export default function DashboardScreen() {
       const chit = await chitRepo.getActiveChit();
       
       if (chit) {
-        const [members, summary, rounds] = await Promise.all([
+        const [members, summary, rounds, bidInfo] = await Promise.all([
           memberRepo.getMembersByChit(chit.id),
           service.getFinancialSummary(chit.id),
-          roundRepo.getRoundsByChit(chit.id)
+          roundRepo.getRoundsByChit(chit.id),
+          service.getCumulativeBidInfo(chit.id)
         ]);
 
         const pending = rounds.find(r => r.status === 'pending');
@@ -87,10 +88,11 @@ export default function DashboardScreen() {
           currentMonthCollected,
           currentMonthPending,
           memberPayments: memberPaymentsList,
-          chitId: chit.id
+          chitId: chit.id,
+          cumulativeBidInfo: bidInfo,
         };
       }
-      return { activeChit: null, memberCount: 0, financials: null, currentMonth: 0, currentMonthCollected: 0, currentMonthPending: 0, memberPayments: [], chitId: null };
+      return { activeChit: null, memberCount: 0, financials: null, currentMonth: 0, currentMonthCollected: 0, currentMonthPending: 0, memberPayments: [], chitId: null, cumulativeBidInfo: null };
     },
     staleTime: 1000 * 30,
     gcTime: 1000 * 60 * 60,
@@ -109,6 +111,7 @@ export default function DashboardScreen() {
   const currentMonthCollected = data?.currentMonthCollected || 0;
   const currentMonthPending = data?.currentMonthPending || 0;
   const memberPayments = data?.memberPayments || [];
+  const cumulativeBidInfo = data?.cumulativeBidInfo;
 
   useFocusEffect(
     useCallback(() => {
@@ -288,12 +291,17 @@ export default function DashboardScreen() {
 
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>
-                <Ionicons name="trending-up-outline" size={12} color="#9ca3af" /> COMMISSION
+                <Ionicons name="trending-up-outline" size={12} color="#9ca3af" /> CUMULATIVE BIDS
               </Text>
-              <Text style={styles.statValue}>₹{(financials.totalCommission / 100).toLocaleString()}</Text>
+              <Text style={styles.statValue}>₹{((cumulativeBidInfo?.cumulativeTotal || 0) / 100).toLocaleString()}</Text>
               <View style={styles.statSubRow}>
-                <View style={[styles.bullet, { backgroundColor: '#10b981' }]} />
-                <Text style={[styles.statSubText, { color: '#10b981' }]}>All settled</Text>
+                <View style={[styles.bullet, { backgroundColor: cumulativeBidInfo?.exceeded ? '#ef4444' : '#10b981' }]} />
+                <Text style={[styles.statSubText, { color: cumulativeBidInfo?.exceeded ? '#ef4444' : '#10b981' }]}>
+                  {cumulativeBidInfo?.exceeded
+                    ? `Exceeded by ₹${(((cumulativeBidInfo?.cumulativeTotal || 0) - (cumulativeBidInfo?.totalValue || 0)) / 100).toLocaleString()}`
+                    : `₹${(((cumulativeBidInfo?.totalValue || 0) - (cumulativeBidInfo?.cumulativeTotal || 0)) / 100).toLocaleString()} remaining`
+                  }
+                </Text>
               </View>
             </View>
           </View>

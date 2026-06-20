@@ -6,6 +6,7 @@ export interface Chit {
   monthly_contribution: number;
   duration_months: number;
   start_date: string;
+  dividend_mode: 'cut' | 'no_cut';
   status: 'active' | 'completed';
   created_at: string;
 }

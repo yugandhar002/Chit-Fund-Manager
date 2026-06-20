@@ -47,6 +47,7 @@ export default function CreateChitScreen() {
         monthly_contribution: monthlyContributionPaisa,
         duration_months: parseInt(duration),
         start_date: startDate.toISOString(),
+        dividend_mode: 'cut',
         status: 'active',
       });
 

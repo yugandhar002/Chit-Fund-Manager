@@ -86,4 +86,12 @@ export class ChitRepository {
     if (error && error.code !== 'PGRST116') throw error;
     return data;
   }
+
+  async updateDividendMode(id: number, mode: 'cut' | 'no_cut'): Promise<void> {
+    const { error } = await supabase
+      .from('chits')
+      .update({ dividend_mode: mode })
+      .eq('id', id);
+    if (error) throw error;
+  }
 }

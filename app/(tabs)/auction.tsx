@@ -8,15 +8,7 @@ import { Theme } from '../../src/constants/theme';
 import { Auction, AuctionRepository, Chit, ChitRepository, MonthlyRound, RoundRepository } from '../../src/database';
 import { ChitService } from '../../src/services/chitService';
 
-interface OverpaidMember {
-  payment_id: number;
-  member_id: number;
-  member_name: string;
-  paid_amount: number;
-  expected_amount: number;
-  refund_amount: number;
-  status: string;
-}
+
 
 export default function AuctionScreen() {
   const router = useRouter();
@@ -24,9 +16,14 @@ export default function AuctionScreen() {
   const [activeChit, setActiveChit] = useState<Chit | null>(null);
   const [currentRound, setCurrentRound] = useState<MonthlyRound | null>(null);
   const [auctions, setAuctions] = useState<(Auction & { winner_name?: string })[]>([]);
-  const [history, setHistory] = useState<(Auction & { winner_name: string, month_number: number })[]>([]);
-  const [overpaidMembers, setOverpaidMembers] = useState<OverpaidMember[]>([]);
+
   const [processing, setProcessing] = useState(false);
+  const [cumulativeBidInfo, setCumulativeBidInfo] = useState<{
+    cumulativeTotal: number;
+    totalValue: number;
+    exceeded: boolean;
+    percentage: number;
+  } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -46,21 +43,13 @@ export default function AuctionScreen() {
 
         setCurrentRound(latest || null);
 
-        if (latest) {
-          const [auctionList, historyList] = await Promise.all([
-            auctionRepo.getAuctionsByRound(latest.id),
-            auctionRepo.getAuctionHistory(chit.id)
-          ]);
-          setAuctions(auctionList);
-          setHistory(historyList);
+        // Load cumulative bid info
+        const bidInfo = await service.getCumulativeBidInfo(chit.id);
+        setCumulativeBidInfo(bidInfo);
 
-          // Load overpaid members if auction exists for this round
-          if (auctionList.length > 0) {
-            const overpaid = await service.getOverpaidMembers(latest.id);
-            setOverpaidMembers(overpaid);
-          } else {
-            setOverpaidMembers([]);
-          }
+        if (latest) {
+          const auctionList = await auctionRepo.getAuctionsByRound(latest.id);
+          setAuctions(auctionList);
         }
       }
     } catch (e) {
@@ -104,15 +93,6 @@ export default function AuctionScreen() {
     }
   };
 
-  const handleMarkRefunded = async (paymentId: number, memberName: string) => {
-    try {
-      const service = new ChitService();
-      await service.markMemberRefunded(paymentId);
-      loadData();
-    } catch (e: any) {
-      console.error('Failed to mark as refunded:', e.message);
-    }
-  };
 
   if (loading && auctions.length === 0 && !activeChit) return <View style={styles.container} />;
 
@@ -158,11 +138,69 @@ export default function AuctionScreen() {
       {/* Month Status Header */}
       <View style={styles.roundHeader}>
         <Text style={styles.roundTitle}>Month {currentRound.month_number}</Text>
-        <Badge
-          label={isActive ? (isMonth1 ? 'Organizer Month' : 'Collecting Payments') : 'Completed'}
-          variant={isActive ? 'info' : 'success'}
-        />
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Badge
+            label={activeChit.dividend_mode === 'no_cut' ? 'No Dividend' : 'Dividend Cut'}
+            variant={activeChit.dividend_mode === 'no_cut' ? 'warning' : 'info'}
+          />
+          <Badge
+            label={isActive ? (isMonth1 ? 'Organizer Month' : 'Collecting Payments') : 'Completed'}
+            variant={isActive ? 'info' : 'success'}
+          />
+        </View>
       </View>
+
+      {/* Cumulative Bid Progress Card */}
+      {cumulativeBidInfo && cumulativeBidInfo.cumulativeTotal > 0 && (
+        <Card style={[
+          styles.cumulativeCard,
+          cumulativeBidInfo.exceeded && styles.cumulativeCardExceeded,
+        ]}>
+          <View style={styles.cumulativeHeader}>
+            <View style={styles.cumulativeHeaderLeft}>
+              <Ionicons
+                name={cumulativeBidInfo.exceeded ? 'warning' : 'analytics-outline'}
+                size={20}
+                color={cumulativeBidInfo.exceeded ? '#EF4444' : Colors.secondary}
+              />
+              <Text style={[
+                styles.cumulativeTitle,
+                cumulativeBidInfo.exceeded && styles.cumulativeTitleExceeded,
+              ]}>
+                {cumulativeBidInfo.exceeded ? 'Bids Exceeded Chit Value!' : 'Cumulative Bid Progress'}
+              </Text>
+            </View>
+            <Text style={[
+              styles.cumulativePercent,
+              cumulativeBidInfo.exceeded && { color: '#EF4444' },
+            ]}>
+              {Math.round(cumulativeBidInfo.percentage)}%
+            </Text>
+          </View>
+          <View style={styles.cumulativeBarBg}>
+            <View style={[
+              styles.cumulativeBarFill,
+              {
+                width: `${Math.min(100, cumulativeBidInfo.percentage)}%`,
+                backgroundColor: cumulativeBidInfo.exceeded ? '#EF4444' : Colors.secondary,
+              },
+            ]} />
+          </View>
+          <View style={styles.cumulativeValues}>
+            <Text style={styles.cumulativeText}>
+              ₹{(cumulativeBidInfo.cumulativeTotal / 100).toLocaleString()}
+            </Text>
+            <Text style={styles.cumulativeText}>
+              of ₹{(cumulativeBidInfo.totalValue / 100).toLocaleString()}
+            </Text>
+          </View>
+          {cumulativeBidInfo.exceeded && (
+            <Text style={styles.cumulativeWarning}>
+              🚨 Total bids have exceeded the chit value by ₹{((cumulativeBidInfo.cumulativeTotal - cumulativeBidInfo.totalValue) / 100).toLocaleString()}
+            </Text>
+          )}
+        </Card>
+      )}
 
       {/* Active Month — Show appropriate actions */}
       {isActive && (
@@ -221,14 +259,23 @@ export default function AuctionScreen() {
                       <Text style={styles.resultValuePaisa}>₹{(auction.commission_amount / 100).toLocaleString()}</Text>
                     </View>
                     <View style={styles.separator} />
-                    <View style={styles.resultRow}>
-                      <Text style={styles.resultLabel}>Dividend per Member</Text>
-                      <Text style={styles.dividendValue}>₹{(auction.dividend_per_member / 100).toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.resultRow}>
-                      <Text style={styles.resultLabel}>This Month's Payment</Text>
-                      <Text style={styles.effectiveValue}>₹{(auction.effective_contribution / 100).toLocaleString()}</Text>
-                    </View>
+                    {auction.dividend_per_member > 0 ? (
+                      <>
+                        <View style={styles.resultRow}>
+                          <Text style={styles.resultLabel}>Dividend per Member</Text>
+                          <Text style={styles.dividendValue}>₹{(auction.dividend_per_member / 100).toLocaleString()}</Text>
+                        </View>
+                        <View style={styles.resultRow}>
+                          <Text style={styles.resultLabel}>This Month's Payment</Text>
+                          <Text style={styles.effectiveValue}>₹{(auction.effective_contribution / 100).toLocaleString()}</Text>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={styles.resultRow}>
+                        <Text style={styles.resultLabel}>Dividend</Text>
+                        <Text style={[styles.effectiveValue, { color: Colors.success }]}>No dividend cut</Text>
+                      </View>
+                    )}
                     <View style={styles.resultRow}>
                       <Text style={styles.resultLabel}>Payout to Winner</Text>
                       <Text style={styles.payoutValue}>₹{(auction.payout_amount / 100).toLocaleString()}</Text>
@@ -236,50 +283,6 @@ export default function AuctionScreen() {
                   </Card>
                 </View>
               ))}
-
-              {/* Overpaid Members Section */}
-              {overpaidMembers.length > 0 && (
-                <View style={styles.overpaidSection}>
-                  <Text style={styles.sectionTitle}>⚠️ Overpaid Members — Refund Required</Text>
-                  {overpaidMembers.map((member) => (
-                    <Card
-                      key={member.payment_id}
-                      style={[
-                        styles.overpaidCard,
-                        member.status === 'refunded' ? styles.refundedCard : null
-                      ]}
-                    >
-                      <View style={styles.overpaidHeader}>
-                        <View style={styles.overpaidInfo}>
-                          <View style={styles.overpaidAvatar}>
-                            <Text style={styles.overpaidAvatarText}>{member.member_name.charAt(0)}</Text>
-                          </View>
-                          <View>
-                            <Text style={styles.overpaidName}>{member.member_name}</Text>
-                            <Text style={styles.overpaidDetail}>
-                              Paid: ₹{(member.paid_amount / 100).toLocaleString()} | Expected: ₹{(member.expected_amount / 100).toLocaleString()}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.refundBadge}>
-                          <Text style={styles.refundAmount}>
-                            {member.status === 'refunded' ? '✅ Refunded' : `₹${(member.refund_amount / 100).toLocaleString()}`}
-                          </Text>
-                        </View>
-                      </View>
-                      {member.status !== 'refunded' && (
-                        <TouchableOpacity
-                          style={styles.refundButton}
-                          onPress={() => handleMarkRefunded(member.payment_id, member.member_name)}
-                        >
-                          <Ionicons name="checkmark-circle-outline" size={18} color={Colors.textPrimary} />
-                          <Text style={styles.refundButtonText}>Mark as Refunded</Text>
-                        </TouchableOpacity>
-                      )}
-                    </Card>
-                  ))}
-                </View>
-              )}
 
               {/* Conclude Month Button */}
               <Button
@@ -318,32 +321,7 @@ export default function AuctionScreen() {
         </View>
       )}
 
-      {/* History */}
-      <Text style={styles.sectionTitle}>Auction History</Text>
-      {history.length > 0 ? (
-        history.map((item) => (
-          <Card key={`${item.round_id}-${item.auction_number}`} style={styles.historyCard}>
-            <View style={styles.historyHeader}>
-              <Text style={styles.historyMonth}>Month {item.month_number}</Text>
-              <Text style={styles.historyDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
-            </View>
-            <View style={styles.historyBody}>
-              <View>
-                <Text style={styles.historyLabel}>Winner</Text>
-                <Text style={styles.historyWinner}>{item.winner_name}</Text>
-              </View>
-              <View style={styles.historyValues}>
-                <Text style={styles.historyLabel}>Commission</Text>
-                <Text style={styles.historyCommission}>₹{(item.commission_amount / 100).toLocaleString()}</Text>
-              </View>
-            </View>
-          </Card>
-        ))
-      ) : (
-        <Card style={styles.historyPlaceholder}>
-          <Text style={styles.placeholderText}>No auctions recorded yet.</Text>
-        </Card>
-      )}
+
     </ScrollView>
   );
 }
@@ -442,85 +420,75 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginVertical: Theme.spacing.md,
   },
+
+  // Cumulative Bid Progress
+  cumulativeCard: {
+    padding: Theme.spacing.lg,
+    marginBottom: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.secondary + '30',
+  },
+  cumulativeCardExceeded: {
+    borderColor: '#EF4444',
+    backgroundColor: '#EF444408',
+  },
+  cumulativeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Theme.spacing.sm,
+  },
+  cumulativeHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cumulativeTitle: {
+    color: Colors.secondary,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  cumulativeTitleExceeded: {
+    color: '#EF4444',
+  },
+  cumulativePercent: {
+    color: Colors.secondary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cumulativeBarBg: {
+    height: 8,
+    backgroundColor: Colors.border,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: Theme.spacing.sm,
+  },
+  cumulativeBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  cumulativeValues: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  cumulativeText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cumulativeWarning: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginTop: Theme.spacing.sm,
+    textAlign: 'center',
+  },
+
   concludeButton: {
     marginTop: Theme.spacing.xl,
   },
 
-  // Overpaid Members
-  overpaidSection: {
-    marginTop: Theme.spacing.md,
-  },
-  overpaidCard: {
-    padding: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B', // Amber/Warning
-    backgroundColor: '#F59E0B10',
-  },
-  refundedCard: {
-    borderLeftColor: Colors.success,
-    backgroundColor: Colors.success + '10',
-  },
-  overpaidHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  overpaidInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  overpaidAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F59E0B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Theme.spacing.md,
-  },
-  overpaidAvatarText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  overpaidName: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  overpaidDetail: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  refundBadge: {
-    backgroundColor: '#F59E0B20',
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: 4,
-    borderRadius: Theme.borderRadius.sm,
-  },
-  refundAmount: {
-    color: '#F59E0B',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  refundButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
-    backgroundColor: Colors.success,
-    borderRadius: Theme.borderRadius.sm,
-    gap: 6,
-  },
-  refundButtonText: {
-    color: Colors.textPrimary,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
+
 
   // Next Step
   nextStepContainer: {
@@ -539,54 +507,5 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.sm,
   },
 
-  // History
-  historyPlaceholder: {
-    padding: Theme.spacing.xl,
-    alignItems: 'center',
-  },
-  placeholderText: {
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  historyCard: {
-    padding: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Theme.spacing.sm,
-  },
-  historyMonth: {
-    color: Colors.textPrimary,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  historyDate: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-  },
-  historyBody: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  historyWinner: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  historyLabel: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    textTransform: 'uppercase',
-  },
-  historyValues: {
-    alignItems: 'flex-end',
-  },
-  historyCommission: {
-    color: Colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+
 });

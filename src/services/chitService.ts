@@ -126,7 +126,7 @@ export class ChitService {
     dividend_per_member: number;
     effective_contribution: number;
     auction_number: number;
-  }): Promise<{ auctionId: number; overpaidMembers: any[] }> {
+  }, dividendMode?: 'cut' | 'no_cut'): Promise<{ auctionId: number; overpaidMembers: any[] }> {
     const auctionRepo = new AuctionRepository();
     const paymentRepo = new PaymentRepository();
     const chitRepo = new ChitRepository();
@@ -134,13 +134,31 @@ export class ChitService {
     const chit = await chitRepo.getChitById(chitId);
     if (!chit) throw new Error('Chit not found');
 
-    const auctionId = await auctionRepo.recordAuction(data);
+    // Use the passed mode, or fall back to the chit's saved mode
+    const mode = dividendMode || chit.dividend_mode || 'cut';
 
-    const newExpectedAmount = data.effective_contribution;
-    await paymentRepo.updateExpectedAmountsForRound(data.round_id, newExpectedAmount);
-    await paymentRepo.markOverpaidMembers(data.round_id);
+    let auctionData = { ...data };
 
-    const overpaidMembers = await paymentRepo.getOverpaidMembers(data.round_id);
+    if (mode === 'no_cut') {
+      // In no_cut mode: record commission/payout as-is, but no dividend deduction
+      auctionData.dividend_per_member = 0;
+      auctionData.effective_contribution = chit.monthly_contribution;
+    }
+
+    const auctionId = await auctionRepo.recordAuction(auctionData);
+
+    if (mode === 'cut') {
+      // Cut mode: reduce expected payments by dividend (original behavior)
+      const newExpectedAmount = auctionData.effective_contribution;
+      await paymentRepo.updateExpectedAmountsForRound(data.round_id, newExpectedAmount);
+      await paymentRepo.markOverpaidMembers(data.round_id);
+    }
+    // In no_cut mode: DO NOT touch expected amounts — they stay at full monthly_contribution
+
+    const overpaidMembers = mode === 'cut'
+      ? await paymentRepo.getOverpaidMembers(data.round_id)
+      : [];
+
     return { auctionId, overpaidMembers };
   }
 
@@ -157,6 +175,36 @@ export class ChitService {
   async recordAuctionResult(chitId: number, data: any): Promise<number> {
     const auctionRepo = new AuctionRepository();
     return await auctionRepo.recordAuction(data);
+  }
+
+  async getCumulativeBidInfo(chitId: number): Promise<{
+    cumulativeTotal: number;
+    totalValue: number;
+    exceeded: boolean;
+    percentage: number;
+  }> {
+    const auctionRepo = new AuctionRepository();
+    const chitRepo = new ChitRepository();
+
+    const [cumulativeTotal, chit] = await Promise.all([
+      auctionRepo.getCumulativeCommission(chitId),
+      chitRepo.getChitById(chitId),
+    ]);
+
+    const totalValue = chit?.total_value || 0;
+    const percentage = totalValue > 0 ? (cumulativeTotal / totalValue) * 100 : 0;
+
+    return {
+      cumulativeTotal,
+      totalValue,
+      exceeded: cumulativeTotal > totalValue,
+      percentage,
+    };
+  }
+
+  async toggleDividendMode(chitId: number, mode: 'cut' | 'no_cut'): Promise<void> {
+    const chitRepo = new ChitRepository();
+    await chitRepo.updateDividendMode(chitId, mode);
   }
 
   async addPaymentTransaction(paymentId: number, newAmount: number, notes?: string, paymentDate?: string): Promise<void> {
